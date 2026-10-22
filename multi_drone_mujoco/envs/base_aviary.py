@@ -187,11 +187,19 @@ def _generate_aviary_xml(
       <site name="{prefix}_center" pos="0 0 0" group="5"/>
 {prop_sites}"""
 
-        # Add camera for vision
+        # Add cameras for vision
         if vision:
             drone_bodies += f'      <camera name="{prefix}_cam" pos="0.02 0 0" xyaxes="0 -1 0 0 0 1" fovy="60"/>\n'
+            drone_bodies += f"""    <body name="{prefix}_gimbal" pos="0 0 0">
+                    <joint name="{prefix}_gimbal_joint" type="hinge" axis="0 1 0" range="-90 90"/>
+                    <geom name="{prefix}_gimbal_geom" type="box" size="0.02 0.02 0.02" rgba="0.5 0.5 0.5 1"/>
+                    <camera name="{prefix}_gimbal_cam" pos="0 0 0" xyaxes="1 0 0 0 1 0" fovy="60"/>
+                </body>\n"""
+
+            actuators += f"""    <motor name="{prefix}_gimbal_motor" joint="{prefix}_gimbal_joint" ctrllimited="true" ctrlrange="-1 1"/>\n"""
 
         drone_bodies += "    </body>\n"
+
 
         # Sensors
         sensors += f"""
@@ -534,7 +542,7 @@ class BaseAviary(gym.Env):
             Action array, format depends on self.ACT_TYPE.
         """
         # Preprocess action to RPMs
-        clipped_action = np.reshape(self._preprocessAction(action), (self.NUM_DRONES, 4))
+        clipped_action, gimbal = np.reshape(self._preprocessAction(action), (self.NUM_DRONES, 4))
 
         # Simulation sub-steps
         for _ in range(self.SIM_STEPS_PER_CTRL):
@@ -547,6 +555,14 @@ class BaseAviary(gym.Env):
 
             # Apply physics for each drone
             for i in range(self.NUM_DRONES):
+                # Apply gimbal control
+                if self.PHYSICS != Physics.DYN:
+                    gimbal_actuator_id = mujoco.mj_name2id(
+                        self.model,
+                        mujoco.mjtObj.mjOBJ_ACTUATOR,
+                        f"drone{i}_gimbal_motor"
+                    )
+                    self.data.ctrl[gimbal_actuator_id] = gimbal[i]
                 if self.PHYSICS == Physics.MJC:
                     self._physics(clipped_action[i, :], i)
                 elif self.PHYSICS == Physics.DYN:
@@ -830,21 +846,34 @@ class BaseAviary(gym.Env):
         3. otherwise -> original per-env behaviour, unchanged.
         """
         cam_name = f"drone{nth_drone}_cam"
+        gimbal_cam_name = f"drone{nth_drone}_gimbal_cam"
         cam_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, cam_name)
-        if cam_id < 0:
+        gimbal_cam_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, gimbal_cam_name)
+        
+        if cam_id < 0 or gimbal_cam_id < 0:
             return (np.zeros((self.IMG_RES[1], self.IMG_RES[0], 4), dtype=np.uint8),
+                    np.ones((self.IMG_RES[1], self.IMG_RES[0]), dtype=np.float32),
+                    np.zeros((self.IMG_RES[1], self.IMG_RES[0]), dtype=np.int32),
+                    np.zeros((self.IMG_RES[1], self.IMG_RES[0], 4), dtype=np.uint8),
                     np.ones((self.IMG_RES[1], self.IMG_RES[0]), dtype=np.float32),
                     np.zeros((self.IMG_RES[1], self.IMG_RES[0]), dtype=np.int32))
 
         if self._external_renderer is not None:
-            return self._external_renderer.render(
-                self.data, cam_name, want_seg=self._render_seg)
+            rgb, dep, seg = self._external_renderer.render(
+                data=self.data, cam_name=cam_name, want_seg=self._render_seg
+            )
+            gimbal_rgb, gimbal_dep, gimbal_seg = self._external_renderer.render(
+                data=self.data, cam_name=gimbal_cam_name, want_seg=self._render_seg
+            )
+            return rgb, dep, seg, gimbal_rgb, gimbal_dep, gimbal_seg
 
         if self._renderer is None:
             self._renderer = mujoco.Renderer(self.model, height=self.IMG_RES[1], width=self.IMG_RES[0])
 
         self._renderer.update_scene(self.data, camera=cam_name)
         rgb = self._renderer.render()
+        self._renderer.update_scene(self.data, camera=gimbal_cam_name)
+        gimbal_rgb = self._renderer.render()
 
         # Depth rendering. The update_scene here looks redundant (same data,
         # unchanged) -- bench/baseline.py measures what dropping it would save,
@@ -854,15 +883,26 @@ class BaseAviary(gym.Env):
         dep = self._renderer.render()
         self._renderer.disable_depth_rendering()
 
+        self._renderer.enable_depth_rendering()
+        self._renderer.update_scene(self.data, camera=gimbal_cam_name)
+        gimbal_dep = self._renderer.render()
+        self._renderer.disable_depth_rendering()
+
         if self._render_seg:
             self._renderer.enable_segmentation_rendering()
             self._renderer.update_scene(self.data, camera=cam_name)
             seg = self._renderer.render()
             self._renderer.disable_segmentation_rendering()
+
+            self._renderer.enable_segmentation_rendering()
+            self._renderer.update_scene(self.data, camera=gimbal_cam_name)
+            gimbal_seg = self._renderer.render()
+            self._renderer.disable_segmentation_rendering()
         else:
             seg = np.zeros((self.IMG_RES[1], self.IMG_RES[0]), dtype=np.int32)
+            gimbal_seg = np.zeros((self.IMG_RES[1], self.IMG_RES[0]), dtype=np.int32)
 
-        return rgb, dep, seg
+        return rgb, dep, seg, gimbal_rgb, gimbal_dep, gimbal_seg
 
     ############################################################################
     # ADJACENCY & NEIGHBOURHOOD
@@ -965,8 +1005,8 @@ class BaseAviary(gym.Env):
     def _actionSpace(self):
         """Define action space based on action type."""
         if self.ACT_TYPE == ActionType.RPM:
-            act_lower = np.zeros(4 * self.NUM_DRONES)
-            act_upper = np.full(4 * self.NUM_DRONES, self.MAX_RPM)
+            act_lower = np.full(5 * self.NUM_DRONES, -1.0)
+            act_upper = np.full(5 * self.NUM_DRONES, 1.0)
         elif self.ACT_TYPE == ActionType.VEL:
             # [vx, vy, vz, yaw_rate] each in [-1, 1]
             act_lower = np.full(4 * self.NUM_DRONES, -1.0)
@@ -1003,6 +1043,7 @@ class BaseAviary(gym.Env):
             return spaces.Dict({
                 "kin": spaces.Box(low=-np.inf, high=np.inf, shape=(20 * self.NUM_DRONES,), dtype=np.float32),
                 "rgb": spaces.Box(low=0, high=255, shape=(self.NUM_DRONES, 48, 64, 4), dtype=np.uint8),
+                "gimbal_rgb": spaces.Box(low=0, high=255, shape=(self.NUM_DRONES, 48, 64, 4), dtype=np.uint8),
             })
         raise ValueError(f"Unknown obs type: {self.OBS_TYPE}")
 
@@ -1020,8 +1061,10 @@ class BaseAviary(gym.Env):
             return imgs
         elif self.OBS_TYPE == ObservationType.KIN_RGB:
             kin = np.hstack([self._getDroneStateVector(i) for i in range(self.NUM_DRONES)])
-            imgs = np.stack([self._getDroneImages(i)[0] for i in range(self.NUM_DRONES)])
-            return {"kin": kin.astype(np.float32), "rgb": imgs}
+            images = [self._getDroneImages(i) for i in range(self.NUM_DRONES)]
+            imgs = np.stack([img[0] for img in images])
+            gimbal_imgs = np.stack([img[3] for img in images])
+            return {"kin": kin.astype(np.float32), "rgb": imgs, "gimbal_rgb": gimbal_imgs}
         return np.array([])
 
     def _computeReward(self):

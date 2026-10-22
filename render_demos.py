@@ -3,7 +3,7 @@ import os
 import numpy as np
 from PIL import Image
 
-os.makedirs("/root/multi_drone_mujoco/demo_gifs", exist_ok=True)
+os.makedirs("./multi_drone_mujoco/demo_gifs", exist_ok=True)
 
 # Use BaseAviary with RPM action type (PID outputs raw RPMs)
 from multi_drone_mujoco.envs.base_aviary import BaseAviary, _generate_aviary_xml
@@ -32,10 +32,13 @@ def make_env(num_drones=1, initial_xyzs=None):
 
 def stabilize(env, ctrl, target, drone_id=0, steps=300):
     for _ in range(steps):
-        rpm, _, _ = ctrl.computeControl(
-            env.CTRL_TIMESTEP, env.pos[drone_id], env.quat[drone_id],
-            env.vel[drone_id], env.ang_v[drone_id], target)
-        env.step(rpm.flatten())
+        rpm = np.zeros((env.NUM_DRONES, 4))
+        for d in range(env.NUM_DRONES):
+            rpm_d, _, _ = ctrl.computeControl(
+                env.CTRL_TIMESTEP, env.pos[d], env.quat[d],
+                env.vel[d], env.ang_v[d], target)
+            rpm[d] = rpm_d.flatten()
+        env.step(rpm)
 
 
 def stabilize_multi(env, ctrls, targets, steps=300):
@@ -66,12 +69,12 @@ def demo_hover_track():
         if i % 3 == 0:
             frames.append(env.render(camera_mode="track"))
     env.close()
-    save_gif(frames, "/root/multi_drone_mujoco/demo_gifs/hover_track.gif")
+    save_gif(frames, "./multi_drone_mujoco/demo_gifs/hover_track.gif")
 
 
 def demo_hover_fixed():
     print("Rendering: Hover (fixed camera)...")
-    env = make_env(initial_xyzs=np.array([[0.0, 0.0, 0.5]]))
+    env = make_env(2, initial_xyzs=np.array([[0.0, 0.0, 0.0], [0.2, 0.2, 0.2]]))
     ctrl = PIDControl(env)
     env.reset()
     target = np.array([0.0, 0.0, 1.0])
@@ -79,13 +82,16 @@ def demo_hover_fixed():
 
     frames = []
     for i in range(200):
-        rpm, _, _ = ctrl.computeControl(
+        rpm_0, _, _ = ctrl.computeControl(
             env.CTRL_TIMESTEP, env.pos[0], env.quat[0], env.vel[0], env.ang_v[0], target)
+        rpm_1, _, _ = ctrl.computeControl(
+            env.CTRL_TIMESTEP, env.pos[1], env.quat[1], env.vel[1], env.ang_v[1], target)
+        rpm = np.concatenate([rpm_0, rpm_1])
         env.step(rpm.flatten())
         if i % 3 == 0:
             frames.append(env.render(camera_mode="fixed"))
     env.close()
-    save_gif(frames, "/root/multi_drone_mujoco/demo_gifs/hover_fixed.gif")
+    save_gif(frames, "./multi_drone_mujoco/demo_gifs/hover_fixed.gif")
 
 
 def demo_hover_fpv():
@@ -104,7 +110,7 @@ def demo_hover_fpv():
         if i % 3 == 0:
             frames.append(env.render(camera_mode="fpv"))
     env.close()
-    save_gif(frames, "/root/multi_drone_mujoco/demo_gifs/hover_fpv.gif")
+    save_gif(frames, "./multi_drone_mujoco/demo_gifs/hover_fpv.gif")
 
 
 def demo_multi_drone():
@@ -128,7 +134,7 @@ def demo_multi_drone():
         if i % 3 == 0:
             frames.append(env.render(camera_mode="track"))
     env.close()
-    save_gif(frames, "/root/multi_drone_mujoco/demo_gifs/multi_drone.gif")
+    save_gif(frames, "./multi_drone_mujoco/demo_gifs/multi_drone.gif")
 
 
 def demo_formation():
@@ -163,7 +169,7 @@ def demo_formation():
         if i % 4 == 0:
             frames.append(env.render(camera_mode="track"))
     env.close()
-    save_gif(frames, "/root/multi_drone_mujoco/demo_gifs/formation.gif")
+    save_gif(frames, "./multi_drone_mujoco/demo_gifs/formation.gif")
 
 
 def demo_wind():
@@ -188,7 +194,7 @@ def demo_wind():
         if i % 3 == 0:
             frames.append(env.render(camera_mode="track"))
     env.close()
-    save_gif(frames, "/root/multi_drone_mujoco/demo_gifs/wind.gif")
+    save_gif(frames, "./multi_drone_mujoco/demo_gifs/wind.gif")
 
 
 def demo_obstacles():
@@ -245,7 +251,7 @@ def demo_obstacles():
         if i % 3 == 0:
             frames.append(env.render(camera_mode="track"))
     env.close()
-    save_gif(frames, "/root/multi_drone_mujoco/demo_gifs/obstacles.gif")
+    save_gif(frames, "./multi_drone_mujoco/demo_gifs/obstacles.gif")
 
 
 def demo_domain_randomization():
@@ -276,7 +282,7 @@ def demo_domain_randomization():
             if i % 3 == 0:
                 all_frames.append(base_env.render(camera_mode="track"))
     env.close()
-    save_gif(all_frames, "/root/multi_drone_mujoco/demo_gifs/domain_randomization.gif")
+    save_gif(all_frames, "./multi_drone_mujoco/demo_gifs/domain_randomization.gif")
 
 
 def demo_vertical_circle():
@@ -305,8 +311,8 @@ def demo_vertical_circle():
             frames_track.append(env.render(camera_mode="track"))
             frames_front.append(env.render(camera_mode="front"))
     env.close()
-    save_gif(frames_track, "/root/multi_drone_mujoco/demo_gifs/vertical_circle.gif")
-    save_gif(frames_front, "/root/multi_drone_mujoco/demo_gifs/vertical_circle_front.gif")
+    save_gif(frames_track, "./multi_drone_mujoco/demo_gifs/vertical_circle.gif")
+    save_gif(frames_front, "./multi_drone_mujoco/demo_gifs/vertical_circle_front.gif")
 
 
 if __name__ == "__main__":
