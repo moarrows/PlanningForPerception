@@ -2,7 +2,7 @@ import os
 import gymnasium as gym
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import EvalCallback
-from multi_drone_mujoco.envs.hover_aviary import CustomAviary
+from multi_drone_mujoco.envs.custom_aviary import CustomAviary
 
 def main():
     print("="*60)
@@ -27,7 +27,7 @@ def main():
 
     # Initialize the PPO model
     # We use a simple MLP policy. 
-    model = PPO("MlpPolicy", env, verbose=1)
+    model = PPO("MultiInputPolicy", env, verbose=1)
     
     # Train for 100,000 steps. This is relatively short but should show the reward trend.
     model.learn(total_timesteps=100000, callback=eval_callback)

@@ -3,6 +3,7 @@
 Task: fly through a sequence of waypoints as quickly as possible.
 """
 
+import mujoco
 import numpy as np
 from gymnasium import spaces
 
@@ -59,40 +60,12 @@ class CustomAviary(BaseAviary):
             initial_xyzs=initial_xyzs,
             render_mode=render_mode,
             vision_attributes=True,
+            gimbal_control=True
         )
 
     def reset(self, seed=None, options=None):
         self.current_waypoint_idx[:] = 0
         return super().reset(seed=seed, options=options)
-
-    def _actionSpace(self):
-        # Define the action space for the environment. Each drone has 5 control inputs: 4 RPMs and 1 gimbal control.
-        return spaces.Box(low=-1, high=1, shape=(5 * self.NUM_DRONES,), dtype=np.float32)
-
-    def _observationSpace(self):
-        # pos(3) + rpy(3) + vel(3) + angvel(3) + next_waypoint(3) + rel_waypoint(3) = 18
-        return spaces.Box(low=-np.inf, high=np.inf, shape=(18 * self.NUM_DRONES,), dtype=np.float32)
-
-    def _preprocessAction(self, action):
-        action = np.clip(np.array(action).reshape(self.NUM_DRONES, 5), -1, 1)
-        rpms = np.zeros((self.NUM_DRONES, 4))
-        gimbal = np.zeros((self.NUM_DRONES, 1))
-        for i in range(self.NUM_DRONES):
-            rpms[i] = self._normalizedActionToRPM(action[i, :4])
-            gimbal[i] = action[i, 4]  # Gimbal control
-        return rpms, gimbal
-
-    def _computeObs(self):
-        obs_list = []
-        for i in range(self.NUM_DRONES):
-            state = self._getDroneStateVector(i)
-            wp_idx = min(self.current_waypoint_idx[i], len(self.WAYPOINTS) - 1)
-            wp = self.WAYPOINTS[wp_idx]
-            rel_wp = wp - self.pos[i]
-            obs_list.append(np.hstack([
-                state[0:3], state[7:10], state[10:13], state[13:16], wp, rel_wp,
-            ]))
-        return np.concatenate(obs_list).astype(np.float32)
 
     def _computeReward(self):
         total = 0.0
