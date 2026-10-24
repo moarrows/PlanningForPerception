@@ -14,6 +14,7 @@ Run (after verify.py passes):
 """
 
 import os
+
 os.environ.setdefault("MUJOCO_GL", "egl")
 
 import argparse
@@ -26,8 +27,13 @@ from pathlib import Path
 import numpy as np
 
 from multi_drone_mujoco.bench._common import (
-    DEFAULT_ENV, GPUSampler, cpu_count, gpu_info, host_rss_mb,
-    make_env_factory, timing_summary,
+    DEFAULT_ENV,
+    GPUSampler,
+    cpu_count,
+    gpu_info,
+    host_rss_mb,
+    make_env_factory,
+    timing_summary,
 )
 
 
@@ -69,13 +75,15 @@ def run_baseline(env_spec: str, n_envs: int, steps: int, warmup: int) -> dict:
         venv.close()
 
 
-def run_shared(env_spec: str, n_envs: int, n_workers: int, steps: int,
-               warmup: int, want_seg: bool) -> dict:
+def run_shared(
+    env_spec: str, n_envs: int, n_workers: int, steps: int, warmup: int, want_seg: bool
+) -> dict:
     from multi_drone_mujoco.vec import SharedRenderVecEnv
 
     venv = SharedRenderVecEnv(
         [make_env_factory(env_spec, i) for i in range(n_envs)],
-        n_workers=n_workers, want_seg=want_seg,
+        n_workers=n_workers,
+        want_seg=want_seg,
     )
     try:
         out = _run(venv, n_envs, steps, warmup)
@@ -106,7 +114,8 @@ def aggregate(runs: list) -> dict:
         "contexts": runs[0]["contexts"],
         "env_steps_per_sec_median": round(statistics.median(fps), 1),
         "env_steps_per_sec_spread_pct": round(
-            100.0 * (max(fps) - min(fps)) / max(statistics.median(fps), 1e-9), 1),
+            100.0 * (max(fps) - min(fps)) / max(statistics.median(fps), 1e-9), 1
+        ),
         "vec_step_p99_ms_median": round(statistics.median(p99), 3),
         "vram_peak_mb_median": round(statistics.median(vram), 1) if vram else None,
         "host_rss_mb_median": round(statistics.median(rss), 1) if rss else None,
@@ -116,6 +125,7 @@ def aggregate(runs: list) -> dict:
 def plot(report: dict, png_path: Path):
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except Exception:
@@ -123,7 +133,10 @@ def plot(report: dict, png_path: Path):
         return
 
     b, s = report["baseline"], report["shared"]
-    labels = [f"baseline\n{b['contexts']} contexts", f"shared\n{s['contexts']} contexts"]
+    labels = [
+        f"baseline\n{b['contexts']} contexts",
+        f"shared\n{s['contexts']} contexts",
+    ]
     colors = ["tab:gray", "tab:green"]
 
     metrics = [
@@ -141,9 +154,14 @@ def plot(report: dict, png_path: Path):
         else:
             bars = ax.bar(labels, vals, color=colors)
             for bar, v in zip(bars, vals):
-                ax.annotate(f"{v:g}", xy=(bar.get_x() + bar.get_width() / 2, v),
-                            xytext=(0, 3), textcoords="offset points",
-                            ha="center", fontsize=9)
+                ax.annotate(
+                    f"{v:g}",
+                    xy=(bar.get_x() + bar.get_width() / 2, v),
+                    xytext=(0, 3),
+                    textcoords="offset points",
+                    ha="center",
+                    fontsize=9,
+                )
             if vals[0]:
                 delta = 100.0 * (vals[1] - vals[0]) / vals[0]
                 ax.set_xlabel(f"{delta:+.1f}% vs baseline")
@@ -153,24 +171,34 @@ def plot(report: dict, png_path: Path):
 
     fig.suptitle(
         f"N = {report['n_envs']} envs   |   {report['repeats']} interleaved repeats",
-        y=1.03)
+        y=1.03,
+    )
     fig.tight_layout()
     fig.savefig(png_path, dpi=130, bbox_inches="tight")
     print(f"[plot] wrote {png_path}")
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--env", default=DEFAULT_ENV)
     p.add_argument("--n-envs", type=int, default=30)
-    p.add_argument("--workers", type=int, required=True,
-                   help="M — take this from calibrate.py's recommendation")
+    p.add_argument(
+        "--workers",
+        type=int,
+        required=True,
+        help="M — take this from calibrate.py's recommendation",
+    )
     p.add_argument("--steps", type=int, default=200)
     p.add_argument("--warmup", type=int, default=30)
     p.add_argument("--repeats", type=int, default=3)
-    p.add_argument("--settle", type=float, default=3.0,
-                   help="seconds between configs, so VRAM is actually released")
+    p.add_argument(
+        "--settle",
+        type=float,
+        default=3.0,
+        help="seconds between configs, so VRAM is actually released",
+    )
     p.add_argument("--seg", action="store_true")
     p.add_argument("--out", default="runs/bench/compare")
     args = p.parse_args()
@@ -203,8 +231,9 @@ def main():
         _settle(args.settle)
 
         print("    shared   (M renderers)          ...", end="", flush=True)
-        r = run_shared(args.env, args.n_envs, args.workers, args.steps,
-                       args.warmup, args.seg)
+        r = run_shared(
+            args.env, args.n_envs, args.workers, args.steps, args.warmup, args.seg
+        )
         report["shared_runs"].append(r)
         print(f" {r['env_steps_per_sec']} env-steps/s  VRAM {r['vram_peak_mb']} MB")
         _settle(args.settle)
@@ -225,9 +254,11 @@ def main():
     ):
         print(f"{name:<28}{str(b.get(key)):>16}{str(s.get(key)):>16}")
     print("=" * 66)
-    print(f"run-to-run spread: baseline {b['env_steps_per_sec_spread_pct']}%,"
-          f" shared {s['env_steps_per_sec_spread_pct']}%"
-          "   (larger than the difference => inconclusive)")
+    print(
+        f"run-to-run spread: baseline {b['env_steps_per_sec_spread_pct']}%,"
+        f" shared {s['env_steps_per_sec_spread_pct']}%"
+        "   (larger than the difference => inconclusive)"
+    )
 
     # What the VRAM saving actually buys: the point of the exercise.
     if b.get("vram_peak_mb_median") and s.get("vram_peak_mb_median"):
@@ -236,10 +267,14 @@ def main():
         per_env_shared = s["vram_peak_mb_median"] / args.n_envs
         print(f"\nVRAM per env: {per_env_base:.1f} MB -> {per_env_shared:.1f} MB")
         if total:
-            print(f"envs that fit in {total:.0f} MB (linear extrapolation, "
-                  f"physics/CPU limits aside):")
-            print(f"    baseline ~{int(total / max(per_env_base, 1e-9))}"
-                  f"    shared ~{int(total / max(per_env_shared, 1e-9))}")
+            print(
+                f"envs that fit in {total:.0f} MB (linear extrapolation, "
+                f"physics/CPU limits aside):"
+            )
+            print(
+                f"    baseline ~{int(total / max(per_env_base, 1e-9))}"
+                f"    shared ~{int(total / max(per_env_shared, 1e-9))}"
+            )
 
     json_path = out.with_suffix(".json")
     json_path.write_text(json.dumps(report, indent=2))

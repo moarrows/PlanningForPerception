@@ -11,16 +11,24 @@ import numpy as np
 
 try:
     from pettingzoo import ParallelEnv
-    from pettingzoo.utils import parallel_to_aec, wrappers
+    from pettingzoo.utils import parallel_to_aec, wrappers  # noqa: F401
+
     PETTINGZOO_AVAILABLE = True
 except ImportError:
     PETTINGZOO_AVAILABLE = False
+
     # Fallback base class
     class ParallelEnv:
         pass
 
+
 from multi_drone_mujoco.envs.base_aviary import BaseAviary
-from multi_drone_mujoco.utils.enums import DroneModel, Physics, ActionType, ObservationType
+from multi_drone_mujoco.utils.enums import (
+    ActionType,
+    DroneModel,
+    ObservationType,
+    Physics,
+)
 
 
 class MultiAgentAviary(ParallelEnv):
@@ -100,7 +108,9 @@ class MultiAgentAviary(ParallelEnv):
     @functools.lru_cache(maxsize=None)
     def action_space(self, agent):
         """4-dim normalized RPM per agent."""
-        return gym.spaces.Box(low=-np.ones(4, dtype=np.float32), high=np.ones(4, dtype=np.float32))
+        return gym.spaces.Box(
+            low=-np.ones(4, dtype=np.float32), high=np.ones(4, dtype=np.float32)
+        )
 
     def reset(self, seed=None, options=None):
         self._env.reset(seed=seed)
@@ -156,29 +166,38 @@ class MultiAgentAviary(ParallelEnv):
                 or abs(self._env.rpy[i, 1]) > np.pi / 2
             )
             terminations[agent] = terminated
-            
+
             if terminated:
                 reward -= 100.0
-                
+
             rewards[agent] = float(reward)
 
-            truncated = self._step_count * self._env.CTRL_TIMESTEP >= self._episode_len_sec
+            truncated = (
+                self._step_count * self._env.CTRL_TIMESTEP >= self._episode_len_sec
+            )
             truncations[agent] = truncated
 
             infos[agent] = {"height_error": float(height_err)}
 
         # Remove terminated agents
-        self.agents = [a for a in self.agents if not terminations[a] and not truncations[a]]
+        self.agents = [
+            a for a in self.agents if not terminations[a] and not truncations[a]
+        ]
 
         return observations, rewards, terminations, truncations, infos
 
     def _get_agent_obs(self, drone_idx):
         """Get per-agent observation."""
         state = self._env._getDroneStateVector(drone_idx)
-        obs = np.hstack([
-            state[0:3], state[7:10], state[10:13], state[13:16],
-            [self.target_heights[drone_idx]],
-        ])
+        obs = np.hstack(
+            [
+                state[0:3],
+                state[7:10],
+                state[10:13],
+                state[13:16],
+                [self.target_heights[drone_idx]],
+            ]
+        )
         return obs.astype(np.float32)
 
     def render(self):

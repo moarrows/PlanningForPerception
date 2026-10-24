@@ -9,7 +9,6 @@ from typing import Callable
 
 import numpy as np
 
-
 # --------------------------------------------------------------------------
 # env factory resolution
 # --------------------------------------------------------------------------
@@ -30,15 +29,18 @@ def resolve_env_class(spec: str):
 
 def make_env_factory(spec: str, rank: int, seed: int = 0) -> Callable:
     """Picklable-by-cloudpickle factory for one env."""
+
     def _init():
         cls = resolve_env_class(spec)
         return cls(seed=seed + rank)
+
     return _init
 
 
 # --------------------------------------------------------------------------
 # GPU / host memory
 # --------------------------------------------------------------------------
+
 
 class GPUSampler:
     """Background sampler for VRAM + utilisation via NVML.
@@ -56,6 +58,7 @@ class GPUSampler:
         self._handle = None
         try:
             import pynvml
+
             pynvml.nvmlInit()
             self._pynvml = pynvml
             self._handle = pynvml.nvmlDeviceGetHandleByIndex(device_index)
@@ -92,7 +95,11 @@ class GPUSampler:
 
     def report(self) -> dict:
         if not self.samples_mb:
-            return {"vram_peak_mb": None, "vram_mean_mb": None, "gpu_util_mean_pct": None}
+            return {
+                "vram_peak_mb": None,
+                "vram_mean_mb": None,
+                "gpu_util_mean_pct": None,
+            }
         return {
             "vram_peak_mb": round(max(self.samples_mb), 1),
             "vram_mean_mb": round(statistics.fmean(self.samples_mb), 1),
@@ -124,6 +131,7 @@ def gpu_info() -> dict:
     """
     try:
         import pynvml
+
         pynvml.nvmlInit()
         h = pynvml.nvmlDeviceGetHandleByIndex(0)
         name = pynvml.nvmlDeviceGetName(h)
@@ -131,7 +139,9 @@ def gpu_info() -> dict:
             name = name.decode()
         return {
             "gpu_name": name,
-            "vram_total_mb": round(pynvml.nvmlDeviceGetMemoryInfo(h).total / 1024 / 1024, 1),
+            "vram_total_mb": round(
+                pynvml.nvmlDeviceGetMemoryInfo(h).total / 1024 / 1024, 1
+            ),
             "sm_clock_mhz": pynvml.nvmlDeviceGetClockInfo(h, pynvml.NVML_CLOCK_SM),
         }
     except Exception:
@@ -140,6 +150,7 @@ def gpu_info() -> dict:
 
 def cpu_count() -> int:
     import os
+
     return os.cpu_count() or 1
 
 

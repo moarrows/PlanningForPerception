@@ -16,7 +16,12 @@ import mujoco.viewer
 import numpy as np
 from gymnasium import spaces
 
-from multi_drone_mujoco.utils.enums import DroneModel, Physics, ActionType, ObservationType, ImageType
+from multi_drone_mujoco.utils.enums import (
+    ActionType,
+    DroneModel,
+    ObservationType,
+    Physics,
+)
 
 # Paths
 # CF2 mesh files (.obj) are vendored under multi_drone_mujoco/assets/cf2.
@@ -24,8 +29,7 @@ from multi_drone_mujoco.utils.enums import DroneModel, Physics, ActionType, Obse
 # so users no longer need to clone the whole menagerie repo. To use a different
 # checkout, set the MJ_DRONES_CF2_ASSETS env var to its assets dir.
 ASSETS_PATH = Path(__file__).resolve().parent.parent / "assets"
-CF2_MESH_DIR = Path(os.environ.get("MJ_DRONES_CF2_ASSETS",
-                                   str(ASSETS_PATH / "cf2")))
+CF2_MESH_DIR = Path(os.environ.get("MJ_DRONES_CF2_ASSETS", str(ASSETS_PATH / "cf2")))
 
 ################################################################################
 # Crazyflie 2.x physical parameters (from Forster 2015 system identification)
@@ -33,15 +37,15 @@ CF2_MESH_DIR = Path(os.environ.get("MJ_DRONES_CF2_ASSETS",
 
 DRONE_PARAMS = {
     DroneModel.CF2X: {
-        "mass": 0.027,                          # kg
-        "arm_length": 0.0397,                   # m (motor-to-center)
+        "mass": 0.027,  # kg
+        "arm_length": 0.0397,  # m (motor-to-center)
         "thrust2weight_ratio": 2.25,
-        "ixx": 1.4e-5,                          # kg*m^2
+        "ixx": 1.4e-5,  # kg*m^2
         "iyy": 1.4e-5,
         "izz": 2.17e-5,
-        "kf": 3.16e-10,                         # thrust coeff (N/(rad/s)^2)
-        "km": 7.94e-12,                         # torque coeff (Nm/(rad/s)^2)
-        "prop_radius": 0.02325,                 # m
+        "kf": 3.16e-10,  # thrust coeff (N/(rad/s)^2)
+        "km": 7.94e-12,  # torque coeff (Nm/(rad/s)^2)
+        "prop_radius": 0.02325,  # m
         "max_speed_kmh": 30.0,
         "gnd_eff_coeff": 11.36859,
         "drag_coeff_xy": 9.1785e-7,
@@ -114,8 +118,7 @@ def _generate_aviary_xml(
 
     # Visual and collision meshes
     visual_meshes = "\n".join(
-        f'    <mesh file="{meshdir}/cf2_{i}.obj" name="cf2_vis_{i}"/>'
-        for i in range(7)
+        f'    <mesh file="{meshdir}/cf2_{i}.obj" name="cf2_vis_{i}"/>' for i in range(7)
     )
     collision_meshes = "\n".join(
         f'    <mesh file="{meshdir}/cf2_collision_{i}.obj" name="cf2_col_{i}"/>'
@@ -149,17 +152,17 @@ def _generate_aviary_xml(
         # Propeller positions (X-configuration for CF2X)
         if drone_model == DroneModel.CF2X:
             prop_offsets = [
-                (L / np.sqrt(2), L / np.sqrt(2), 0),    # front-left
-                (-L / np.sqrt(2), L / np.sqrt(2), 0),   # front-right (corrected)
+                (L / np.sqrt(2), L / np.sqrt(2), 0),  # front-left
+                (-L / np.sqrt(2), L / np.sqrt(2), 0),  # front-right (corrected)
                 (-L / np.sqrt(2), -L / np.sqrt(2), 0),  # rear-right
-                (L / np.sqrt(2), -L / np.sqrt(2), 0),   # rear-left
+                (L / np.sqrt(2), -L / np.sqrt(2), 0),  # rear-left
             ]
         elif drone_model == DroneModel.CF2P:
             prop_offsets = [
-                (L, 0, 0),     # front
-                (0, L, 0),     # left
-                (-L, 0, 0),    # rear
-                (0, -L, 0),    # right
+                (L, 0, 0),  # front
+                (0, L, 0),  # left
+                (-L, 0, 0),  # rear
+                (0, -L, 0),  # right
             ]
         else:  # RACE (same as X)
             prop_offsets = [
@@ -171,13 +174,18 @@ def _generate_aviary_xml(
 
         prop_sites = ""
         for pi, (px, py, pz) in enumerate(prop_offsets):
-            prop_sites += f'      <site name="{prefix}_prop{pi}" pos="{px} {py} {pz}" group="5"/>\n'
+            prop_sites += (
+                f'      <site name="{prefix}_prop{pi}" '
+                f'pos="{px} {py} {pz}" group="5"/>\n'
+            )
 
         drone_bodies += f"""
     <body name="{prefix}" pos="{x} {y} {z}" quat="{qw} {qx} {qy} {qz}">
       <freejoint name="{prefix}_joint"/>
       <inertial pos="0 0 0" mass="{mass}" diaginertia="{ixx} {iyy} {izz}"/>
-      <geom name="{prefix}_collision" type="cylinder" size="{params['collision_r']} {params['collision_h'] / 2}" rgba="0 0 0 0" contype="1" conaffinity="1"/>
+      <geom name="{prefix}_collision" type="cylinder"
+            size="{params["collision_r"]} {params["collision_h"] / 2}"
+            rgba="0 0 0 0" contype="1" conaffinity="1"/>
       <geom mesh="cf2_vis_0" material="propeller_plastic" class="visual"/>
       <geom mesh="cf2_vis_1" material="medium_gloss_plastic" class="visual"/>
       <geom mesh="cf2_vis_2" material="polished_gold" class="visual"/>
@@ -190,19 +198,29 @@ def _generate_aviary_xml(
 
         # Add cameras for vision
         if vision:
-            drone_bodies += f'      <camera name="{prefix}_cam" pos="0.02 0 0" xyaxes="0 -1 0 0 0 1" fovy="60"/>\n'
+            drone_bodies += (
+                f'      <camera name="{prefix}_cam" pos="0.02 0 0" '
+                'xyaxes="0 -1 0 0 0 1" fovy="60"/>\n'
+            )
             if gimbal_control:
-                drone_bodies += f"""    <body name="{prefix}_gimbal" pos="0 0 0">
-                        <joint name="{prefix}_gimbal_joint" type="hinge" axis="0 1 0" range="-90 90"/>
-                        <inertial pos="0 0 0" mass="0.01" diaginertia="1e-5 1e-5 1e-5"/>
-                        <geom name="{prefix}_gimbal_geom" type="box" size="0.02 0.02 0.02" rgba="0.5 0.5 0.5 1"/>
-                        <camera name="{prefix}_gimbal_cam" pos="0 0 0" xyaxes="1 0 0 0 1 0" fovy="60"/>
-                    </body>\n"""
+                drone_bodies += f"""      <body name="{prefix}_gimbal" pos="0 0 0">
+        <joint name="{prefix}_gimbal_joint" type="hinge"
+               axis="0 1 0" range="-90 90"/>
+        <inertial pos="0 0 0" mass="0.01"
+                  diaginertia="1e-5 1e-5 1e-5"/>
+        <geom name="{prefix}_gimbal_geom" type="box"
+              size="0.02 0.02 0.02" rgba="0.5 0.5 0.5 1"/>
+        <camera name="{prefix}_gimbal_cam" pos="0 0 0"
+                xyaxes="1 0 0 0 1 0" fovy="60"/>
+      </body>\n"""
 
-                actuators += f"""    <motor name="{prefix}_gimbal_motor" joint="{prefix}_gimbal_joint" ctrllimited="true" ctrlrange="-1 1"/>\n"""
+                actuators += (
+                    f'    <motor name="{prefix}_gimbal_motor" '
+                    f'joint="{prefix}_gimbal_joint" ctrllimited="true" '
+                    'ctrlrange="-1 1"/>\n'
+                )
 
         drone_bodies += "    </body>\n"
-
 
         # Sensors
         sensors += f"""
@@ -254,16 +272,37 @@ def _generate_aviary_xml(
     <material name="white" rgba="1 1 1 1"/>
     <material name="body_frame_plastic" rgba="0.102 0.102 0.102 1"/>
     <material name="burnished_chrome" rgba="0.898 0.898 0.898 1"/>
-    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
-    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3" markrgb="0.8 0.8 0.8" width="300" height="300"/>
-    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+    <texture type="skybox"
+             builtin="gradient"
+             rgb1="0.3 0.5 0.7"
+             rgb2="0 0 0"
+             width="512"
+             height="3072"/>
+    <texture type="2d"
+             name="groundplane"
+             builtin="checker"
+             mark="edge"
+             rgb1="0.2 0.3 0.4"
+             rgb2="0.1 0.2 0.3"
+             markrgb="0.8 0.8 0.8"
+             width="300"
+             height="300"/>
+    <material name="groundplane"
+              texture="groundplane"
+              texuniform="true"
+              texrepeat="5 5"
+              reflectance="0.2"/>
 {visual_meshes}
 {collision_meshes}
   </asset>
 
   <worldbody>
     <light pos="0 0 3" dir="0 0 -1" directional="true" castshadow="false"/>
-    <geom name="floor" size="10 10 0.05" type="plane" material="groundplane" contype="1" conaffinity="1"/>
+        <geom name="floor"
+            size="10 10 0.05"
+            type="plane"
+            material="groundplane"
+            contype="1" conaffinity="1"/>
 {drone_bodies}{obstacle_bodies}
   </worldbody>
 
@@ -396,7 +435,9 @@ class BaseAviary(gym.Env):
         self.PROP_RADIUS = params["prop_radius"]
         self.MAX_SPEED_KMH = params["max_speed_kmh"]
         self.GND_EFF_COEFF = params["gnd_eff_coeff"]
-        self.DRAG_COEFF = np.array([params["drag_coeff_xy"], params["drag_coeff_xy"], params["drag_coeff_z"]])
+        self.DRAG_COEFF = np.array(
+            [params["drag_coeff_xy"], params["drag_coeff_xy"], params["drag_coeff_z"]]
+        )
         self.DW_COEFF_1 = params["dw_coeff_1"]
         self.DW_COEFF_2 = params["dw_coeff_2"]
         self.DW_COEFF_3 = params["dw_coeff_3"]
@@ -407,24 +448,33 @@ class BaseAviary(gym.Env):
         # Derived constants
         self.GRAVITY = self.G * self.M
         self.HOVER_RPM = np.sqrt(self.GRAVITY / (4 * self.KF))
-        self.MAX_RPM = np.sqrt((self.THRUST2WEIGHT_RATIO * self.GRAVITY) / (4 * self.KF))
-        self.MAX_THRUST = 4 * self.KF * self.MAX_RPM ** 2
+        self.MAX_RPM = np.sqrt(
+            (self.THRUST2WEIGHT_RATIO * self.GRAVITY) / (4 * self.KF)
+        )
+        self.MAX_THRUST = 4 * self.KF * self.MAX_RPM**2
         if drone_model in (DroneModel.CF2X, DroneModel.RACE):
-            self.MAX_XY_TORQUE = (2 * self.L * self.KF * self.MAX_RPM ** 2) / np.sqrt(2)
+            self.MAX_XY_TORQUE = (2 * self.L * self.KF * self.MAX_RPM**2) / np.sqrt(2)
         else:
-            self.MAX_XY_TORQUE = self.L * self.KF * self.MAX_RPM ** 2
-        self.MAX_Z_TORQUE = 2 * self.KM * self.MAX_RPM ** 2
-        self.GND_EFF_H_CLIP = 0.25 * self.PROP_RADIUS * np.sqrt(
-            (15 * self.MAX_RPM ** 2 * self.KF * self.GND_EFF_COEFF) / self.MAX_THRUST
+            self.MAX_XY_TORQUE = self.L * self.KF * self.MAX_RPM**2
+        self.MAX_Z_TORQUE = 2 * self.KM * self.MAX_RPM**2
+        self.GND_EFF_H_CLIP = (
+            0.25
+            * self.PROP_RADIUS
+            * np.sqrt(
+                (15 * self.MAX_RPM**2 * self.KF * self.GND_EFF_COEFF) / self.MAX_THRUST
+            )
         )
 
         # Initial positions/orientations
         if initial_xyzs is None:
-            self.INIT_XYZS = np.vstack([
-                np.array([x * 4 * self.L for x in range(num_drones)]),
-                np.array([y * 4 * self.L for y in range(num_drones)]),
-                np.ones(num_drones) * (self.COLLISION_H / 2 - self.COLLISION_Z_OFFSET + 0.1)
-            ]).T.reshape(num_drones, 3)
+            self.INIT_XYZS = np.vstack(
+                [
+                    np.array([x * 4 * self.L for x in range(num_drones)]),
+                    np.array([y * 4 * self.L for y in range(num_drones)]),
+                    np.ones(num_drones)
+                    * (self.COLLISION_H / 2 - self.COLLISION_Z_OFFSET + 0.1),
+                ]
+            ).T.reshape(num_drones, 3)
         else:
             self.INIT_XYZS = np.array(initial_xyzs).reshape(num_drones, 3)
 
@@ -453,9 +503,15 @@ class BaseAviary(gym.Env):
             self.IMG_RES = np.array([64, 48])
             self.IMG_FRAME_PER_SEC = 24
             self.IMG_CAPTURE_FREQ = int(self.SIM_FREQ / self.IMG_FRAME_PER_SEC)
-            self.rgb = np.zeros((num_drones, self.IMG_RES[1], self.IMG_RES[0], 4), dtype=np.uint8)
-            self.dep = np.ones((num_drones, self.IMG_RES[1], self.IMG_RES[0]), dtype=np.float32)
-            self.seg = np.zeros((num_drones, self.IMG_RES[1], self.IMG_RES[0]), dtype=np.int32)
+            self.rgb = np.zeros(
+                (num_drones, self.IMG_RES[1], self.IMG_RES[0], 4), dtype=np.uint8
+            )
+            self.dep = np.ones(
+                (num_drones, self.IMG_RES[1], self.IMG_RES[0]), dtype=np.float32
+            )
+            self.seg = np.zeros(
+                (num_drones, self.IMG_RES[1], self.IMG_RES[0]), dtype=np.int32
+            )
 
         # Recording
         if self.RECORD:
@@ -514,10 +570,12 @@ class BaseAviary(gym.Env):
 
         # Set initial states
         for i in range(self.NUM_DRONES):
-            joint_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, f"drone{i}_joint")
+            joint_id = mujoco.mj_name2id(
+                self.model, mujoco.mjtObj.mjOBJ_JOINT, f"drone{i}_joint"
+            )
             qpos_addr = self.model.jnt_qposadr[joint_id]
             # Position
-            self.data.qpos[qpos_addr:qpos_addr + 3] = self.INIT_XYZS[i]
+            self.data.qpos[qpos_addr : qpos_addr + 3] = self.INIT_XYZS[i]
             # Quaternion from RPY
             r, p_a, y = self.INIT_RPYS[i]
             cr, sr = np.cos(r / 2), np.sin(r / 2)
@@ -527,7 +585,7 @@ class BaseAviary(gym.Env):
             qx = sr * cp * cy - cr * sp * sy
             qy = cr * sp * cy + sr * cp * sy
             qz = cr * cp * sy - sr * sp * cy
-            self.data.qpos[qpos_addr + 3:qpos_addr + 7] = [qw, qx, qy, qz]
+            self.data.qpos[qpos_addr + 3 : qpos_addr + 7] = [qw, qx, qy, qz]
 
         mujoco.mj_forward(self.model, self.data)
 
@@ -559,19 +617,26 @@ class BaseAviary(gym.Env):
         for _ in range(self.SIM_STEPS_PER_CTRL):
             # Update kinematics between sub-steps for physics effects
             if self.SIM_STEPS_PER_CTRL > 1 and self.PHYSICS in (
-                Physics.DYN, Physics.MJC_GND, Physics.MJC_DRAG,
-                Physics.MJC_DW, Physics.MJC_GND_DRAG_DW
+                Physics.DYN,
+                Physics.MJC_GND,
+                Physics.MJC_DRAG,
+                Physics.MJC_DW,
+                Physics.MJC_GND_DRAG_DW,
             ):
                 self._updateAndStoreKinematicInformation()
 
             # Apply physics for each drone
             for i in range(self.NUM_DRONES):
                 # Apply gimbal control
-                if self.PHYSICS != Physics.DYN and self.VISION_ATTR and self.GIMBAL_CONTROL:
+                if (
+                    self.PHYSICS != Physics.DYN
+                    and self.VISION_ATTR
+                    and self.GIMBAL_CONTROL
+                ):
                     gimbal_actuator_id = mujoco.mj_name2id(
                         self.model,
                         mujoco.mjtObj.mjOBJ_ACTUATOR,
-                        f"drone{i}_gimbal_motor"
+                        f"drone{i}_gimbal_motor",
                     )
                     self.data.ctrl[gimbal_actuator_id] = gimbal[i]
                 if self.PHYSICS == Physics.MJC:
@@ -596,9 +661,11 @@ class BaseAviary(gym.Env):
                 # Apply wind disturbance if configured
                 if self._wind_field is not None:
                     body_id = mujoco.mj_name2id(
-                        self.model, mujoco.mjtObj.mjOBJ_BODY, f"drone{i}")
+                        self.model, mujoco.mjtObj.mjOBJ_BODY, f"drone{i}"
+                    )
                     wind_force = self._wind_field.get_force(
-                        dt=self.SIM_TIMESTEP, position=self.pos[i], velocity=self.vel[i])
+                        dt=self.SIM_TIMESTEP, position=self.pos[i], velocity=self.vel[i]
+                    )
                     self.data.xfrc_applied[body_id, :3] += wind_force
 
             # Step MuJoCo (unless using explicit dynamics)
@@ -638,8 +705,8 @@ class BaseAviary(gym.Env):
         nth_drone : int
             Drone index.
         """
-        forces = np.array(rpm ** 2) * self.KF
-        torques = np.array(rpm ** 2) * self.KM
+        forces = np.array(rpm**2) * self.KF
+        torques = np.array(rpm**2) * self.KM
         if self.DRONE_MODEL == DroneModel.RACE:
             torques = -torques
 
@@ -651,14 +718,20 @@ class BaseAviary(gym.Env):
 
         # Torques from thrust differences
         if self.DRONE_MODEL == DroneModel.CF2X or self.DRONE_MODEL == DroneModel.RACE:
-            x_torque = (forces[0] + forces[1] - forces[2] - forces[3]) * (self.L / np.sqrt(2))
-            y_torque = (-forces[0] + forces[1] + forces[2] - forces[3]) * (self.L / np.sqrt(2))
+            x_torque = (forces[0] + forces[1] - forces[2] - forces[3]) * (
+                self.L / np.sqrt(2)
+            )
+            y_torque = (-forces[0] + forces[1] + forces[2] - forces[3]) * (
+                self.L / np.sqrt(2)
+            )
         else:  # CF2P
             x_torque = (forces[1] - forces[3]) * self.L
             y_torque = (-forces[0] + forces[2]) * self.L
 
         # Apply force and torque to drone body via xfrc_applied
-        body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, f"drone{nth_drone}")
+        body_id = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_BODY, f"drone{nth_drone}"
+        )
 
         # Get rotation matrix for body frame
         rot_mat = np.array(self.data.xmat[body_id]).reshape(3, 3)
@@ -683,19 +756,31 @@ class BaseAviary(gym.Env):
         prop_heights = np.full(4, z)  # Approximate all props at same height
         prop_heights = np.clip(prop_heights, self.GND_EFF_H_CLIP, np.inf)
 
-        gnd_effects = np.array(rpm ** 2) * self.KF * self.GND_EFF_COEFF * (
-            self.PROP_RADIUS / (4 * prop_heights)
-        ) ** 2
+        gnd_effects = (
+            np.array(rpm**2)
+            * self.KF
+            * self.GND_EFF_COEFF
+            * (self.PROP_RADIUS / (4 * prop_heights)) ** 2
+        )
 
         # Only apply if drone is roughly level
-        if np.abs(self.rpy[nth_drone, 0]) < np.pi / 2 and np.abs(self.rpy[nth_drone, 1]) < np.pi / 2:
+        if (
+            np.abs(self.rpy[nth_drone, 0]) < np.pi / 2
+            and np.abs(self.rpy[nth_drone, 1]) < np.pi / 2
+        ):
             gnd_force = np.sum(gnd_effects)
-            body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, f"drone{nth_drone}")
-            self.data.xfrc_applied[body_id, 2] += gnd_force  # Add to z-force in world frame
+            body_id = mujoco.mj_name2id(
+                self.model, mujoco.mjtObj.mjOBJ_BODY, f"drone{nth_drone}"
+            )
+            self.data.xfrc_applied[body_id, 2] += (
+                gnd_force  # Add to z-force in world frame
+            )
 
     def _drag(self, rpm, nth_drone):
         """Drag model based on Forster (2015) system identification."""
-        body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, f"drone{nth_drone}")
+        body_id = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_BODY, f"drone{nth_drone}"
+        )
         rot_mat = np.array(self.data.xmat[body_id]).reshape(3, 3)
 
         drag_factors = -1 * self.DRAG_COEFF * np.sum(np.array(2 * np.pi * rpm / 60))
@@ -718,7 +803,9 @@ class BaseAviary(gym.Env):
                 beta = self.DW_COEFF_2 * delta_z + self.DW_COEFF_3
                 downwash_force = -alpha * np.exp(-0.5 * (delta_xy / beta) ** 2)
 
-                body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, f"drone{nth_drone}")
+                body_id = mujoco.mj_name2id(
+                    self.model, mujoco.mjtObj.mjOBJ_BODY, f"drone{nth_drone}"
+                )
                 self.data.xfrc_applied[body_id, 2] += downwash_force
 
     def _dynamics(self, rpm, nth_drone):
@@ -732,23 +819,29 @@ class BaseAviary(gym.Env):
         rpy_rates = self.rpy_rates[nth_drone, :]
 
         # Rotation matrix from quaternion
-        body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, f"drone{nth_drone}")
+        body_id = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_BODY, f"drone{nth_drone}"
+        )
         rotation = np.array(self.data.xmat[body_id]).reshape(3, 3)
 
         # Forces and torques
-        forces = np.array(rpm ** 2) * self.KF
+        forces = np.array(rpm**2) * self.KF
         thrust = np.array([0, 0, np.sum(forces)])
         thrust_world_frame = rotation @ thrust
         force_world_frame = thrust_world_frame - np.array([0, 0, self.GRAVITY])
 
-        z_torques = np.array(rpm ** 2) * self.KM
+        z_torques = np.array(rpm**2) * self.KM
         if self.DRONE_MODEL == DroneModel.RACE:
             z_torques = -z_torques
         z_torque = -z_torques[0] + z_torques[1] - z_torques[2] + z_torques[3]
 
         if self.DRONE_MODEL in (DroneModel.CF2X, DroneModel.RACE):
-            x_torque = (forces[0] + forces[1] - forces[2] - forces[3]) * (self.L / np.sqrt(2))
-            y_torque = (-forces[0] + forces[1] + forces[2] - forces[3]) * (self.L / np.sqrt(2))
+            x_torque = (forces[0] + forces[1] - forces[2] - forces[3]) * (
+                self.L / np.sqrt(2)
+            )
+            y_torque = (-forces[0] + forces[1] + forces[2] - forces[3]) * (
+                self.L / np.sqrt(2)
+            )
         else:
             x_torque = (forces[1] - forces[3]) * self.L
             y_torque = (-forces[0] + forces[2]) * self.L
@@ -765,14 +858,16 @@ class BaseAviary(gym.Env):
         quat_new = self._integrateQ(quat, rpy_rates_new, self.SIM_TIMESTEP)
 
         # Set state in MuJoCo
-        joint_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, f"drone{nth_drone}_joint")
+        joint_id = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_JOINT, f"drone{nth_drone}_joint"
+        )
         qpos_addr = self.model.jnt_qposadr[joint_id]
         qvel_addr = self.model.jnt_dofadr[joint_id]
 
-        self.data.qpos[qpos_addr:qpos_addr + 3] = pos_new
-        self.data.qpos[qpos_addr + 3:qpos_addr + 7] = quat_new
-        self.data.qvel[qvel_addr:qvel_addr + 3] = vel_new
-        self.data.qvel[qvel_addr + 3:qvel_addr + 6] = rotation @ rpy_rates_new
+        self.data.qpos[qpos_addr : qpos_addr + 3] = pos_new
+        self.data.qpos[qpos_addr + 3 : qpos_addr + 7] = quat_new
+        self.data.qvel[qvel_addr : qvel_addr + 3] = vel_new
+        self.data.qvel[qvel_addr + 3 : qvel_addr + 6] = rotation @ rpy_rates_new
 
         self.rpy_rates[nth_drone, :] = rpy_rates_new
         mujoco.mj_forward(self.model, self.data)
@@ -783,14 +878,21 @@ class BaseAviary(gym.Env):
         if omega_norm < 1e-10:
             return quat
         p, q, r = omega
-        lambda_ = np.array([
-            [0, r, -q, p],
-            [-r, 0, p, q],
-            [q, -p, 0, r],
-            [-p, -q, -r, 0],
-        ]) * 0.5
+        lambda_ = (
+            np.array(
+                [
+                    [0, r, -q, p],
+                    [-r, 0, p, q],
+                    [q, -p, 0, r],
+                    [-p, -q, -r, 0],
+                ]
+            )
+            * 0.5
+        )
         theta = omega_norm * dt / 2
-        quat_new = (np.eye(4) * np.cos(theta) + 2 / omega_norm * lambda_ * np.sin(theta)) @ quat
+        quat_new = (
+            np.eye(4) * np.cos(theta) + 2 / omega_norm * lambda_ * np.sin(theta)
+        ) @ quat
         return quat_new / np.linalg.norm(quat_new)
 
     ############################################################################
@@ -800,14 +902,16 @@ class BaseAviary(gym.Env):
     def _updateAndStoreKinematicInformation(self):
         """Read and cache drone states from MuJoCo data."""
         for i in range(self.NUM_DRONES):
-            joint_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, f"drone{i}_joint")
+            joint_id = mujoco.mj_name2id(
+                self.model, mujoco.mjtObj.mjOBJ_JOINT, f"drone{i}_joint"
+            )
             qpos_addr = self.model.jnt_qposadr[joint_id]
             qvel_addr = self.model.jnt_dofadr[joint_id]
 
-            self.pos[i] = self.data.qpos[qpos_addr:qpos_addr + 3]
-            self.quat[i] = self.data.qpos[qpos_addr + 3:qpos_addr + 7]
-            self.vel[i] = self.data.qvel[qvel_addr:qvel_addr + 3]
-            self.ang_v[i] = self.data.qvel[qvel_addr + 3:qvel_addr + 6]
+            self.pos[i] = self.data.qpos[qpos_addr : qpos_addr + 3]
+            self.quat[i] = self.data.qpos[qpos_addr + 3 : qpos_addr + 7]
+            self.vel[i] = self.data.qvel[qvel_addr : qvel_addr + 3]
+            self.ang_v[i] = self.data.qvel[qvel_addr + 3 : qvel_addr + 6]
             # Quaternion to RPY
             self.rpy[i] = self._quatToRPY(self.quat[i])
 
@@ -835,14 +939,18 @@ class BaseAviary(gym.Env):
 
         Returns: [pos(3), quat(4), rpy(3), vel(3), ang_v(3), last_action(4)]
         """
-        return np.hstack([
-            self.pos[nth_drone, :],
-            self.quat[nth_drone, :],
-            self.rpy[nth_drone, :],
-            self.vel[nth_drone, :],
-            self.ang_v[nth_drone, :],
-            self.last_clipped_action[nth_drone, :],
-        ]).reshape(20,)
+        return np.hstack(
+            [
+                self.pos[nth_drone, :],
+                self.quat[nth_drone, :],
+                self.rpy[nth_drone, :],
+                self.vel[nth_drone, :],
+                self.ang_v[nth_drone, :],
+                self.last_clipped_action[nth_drone, :],
+            ]
+        ).reshape(
+            20,
+        )
 
     def _getDroneImages(self, nth_drone):
         """Render RGB, depth, and segmentation from the nth drone's camera.
@@ -863,15 +971,21 @@ class BaseAviary(gym.Env):
         cam_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, cam_name)
 
         gimbal_cam_name = f"drone{nth_drone}_gimbal_cam"
-        gimbal_cam_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, gimbal_cam_name)
-        
+        gimbal_cam_id = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_CAMERA, gimbal_cam_name
+        )
+
         if cam_id < 0:
-            images.append(np.zeros((self.IMG_RES[1], self.IMG_RES[0], 4), dtype=np.uint8))
+            images.append(
+                np.zeros((self.IMG_RES[1], self.IMG_RES[0], 4), dtype=np.uint8)
+            )
             images.append(np.ones((self.IMG_RES[1], self.IMG_RES[0]), dtype=np.float32))
             images.append(np.zeros((self.IMG_RES[1], self.IMG_RES[0]), dtype=np.int32))
 
         if self.GIMBAL_CONTROL and gimbal_cam_id < 0:
-            images.append(np.zeros((self.IMG_RES[1], self.IMG_RES[0], 4), dtype=np.uint8))
+            images.append(
+                np.zeros((self.IMG_RES[1], self.IMG_RES[0], 4), dtype=np.uint8)
+            )
             images.append(np.ones((self.IMG_RES[1], self.IMG_RES[0]), dtype=np.float32))
             images.append(np.zeros((self.IMG_RES[1], self.IMG_RES[0]), dtype=np.int32))
 
@@ -892,7 +1006,9 @@ class BaseAviary(gym.Env):
             return tuple(images)
 
         if self._renderer is None:
-            self._renderer = mujoco.Renderer(self.model, height=self.IMG_RES[1], width=self.IMG_RES[0])
+            self._renderer = mujoco.Renderer(
+                self.model, height=self.IMG_RES[1], width=self.IMG_RES[0]
+            )
 
         self._renderer.update_scene(self.data, camera=cam_name)
         rgb = self._renderer.render()
@@ -932,7 +1048,9 @@ class BaseAviary(gym.Env):
                 gimbal_seg = self._renderer.render()
                 self._renderer.disable_segmentation_rendering()
             else:
-                gimbal_seg = np.zeros((self.IMG_RES[1], self.IMG_RES[0]), dtype=np.int32)
+                gimbal_seg = np.zeros(
+                    (self.IMG_RES[1], self.IMG_RES[0]), dtype=np.int32
+                )
 
             images.append(gimbal_rgb)
             images.append(gimbal_dep)
@@ -949,7 +1067,10 @@ class BaseAviary(gym.Env):
         adj = np.identity(self.NUM_DRONES)
         for i in range(self.NUM_DRONES - 1):
             for j in range(i + 1, self.NUM_DRONES):
-                if np.linalg.norm(self.pos[i] - self.pos[j]) < self.NEIGHBOURHOOD_RADIUS:
+                if (
+                    np.linalg.norm(self.pos[i] - self.pos[j])
+                    < self.NEIGHBOURHOOD_RADIUS
+                ):
                     adj[i, j] = adj[j, i] = 1
         return adj
 
@@ -969,7 +1090,9 @@ class BaseAviary(gym.Env):
                     gimbal[i] = action[i, 4]  # Gimbal control
                 return rpms, gimbal
             else:
-                return np.clip(np.array(action).reshape(self.NUM_DRONES, 4), 0, self.MAX_RPM)
+                return np.clip(
+                    np.array(action).reshape(self.NUM_DRONES, 4), 0, self.MAX_RPM
+                )
 
         elif self.ACT_TYPE == ActionType.ONE_D_RPM:
             # Single normalized thrust per drone → same RPM to all 4 motors
@@ -981,13 +1104,15 @@ class BaseAviary(gym.Env):
             # Velocity control: [vx, vy, vz, yaw_rate] per drone
             # Uses internal PID to compute RPMs
             from multi_drone_mujoco.control.pid_control import PIDControl
+
             action = np.array(action).reshape(self.NUM_DRONES, 4)
             rpms = np.zeros((self.NUM_DRONES, 4))
             for i in range(self.NUM_DRONES):
-                state = self._getDroneStateVector(i)
                 # Compute target position from velocity
                 target_pos = self.pos[i] + action[i, :3] * self.CTRL_TIMESTEP
-                target_rpy = np.array([0, 0, self.rpy[i, 2] + action[i, 3] * self.CTRL_TIMESTEP])
+                target_rpy = np.array(
+                    [0, 0, self.rpy[i, 2] + action[i, 3] * self.CTRL_TIMESTEP]
+                )
                 rpms[i, :], _, _ = PIDControl(self).computeControl(
                     control_timestep=self.CTRL_TIMESTEP,
                     cur_pos=self.pos[i],
@@ -1002,6 +1127,7 @@ class BaseAviary(gym.Env):
         elif self.ACT_TYPE == ActionType.PID:
             # Target [x, y, z, yaw] per drone → PID computes RPMs
             from multi_drone_mujoco.control.pid_control import PIDControl
+
             action = np.array(action).reshape(self.NUM_DRONES, 4)
             rpms = np.zeros((self.NUM_DRONES, 4))
             for i in range(self.NUM_DRONES):
@@ -1025,12 +1151,34 @@ class BaseAviary(gym.Env):
             for i in range(self.NUM_DRONES):
                 thrust_norm, roll_cmd, pitch_cmd, yaw_rate_cmd = action[i]
                 # Convert thrust to collective RPM
-                collective_rpm = self.HOVER_RPM + (self.MAX_RPM - self.HOVER_RPM) * thrust_norm
+                collective_rpm = (
+                    self.HOVER_RPM + (self.MAX_RPM - self.HOVER_RPM) * thrust_norm
+                )
                 # Simple mixer (X-config)
-                rpms[i, 0] = collective_rpm + roll_cmd * 0.25 * self.MAX_RPM - pitch_cmd * 0.25 * self.MAX_RPM - yaw_rate_cmd * 0.25 * self.MAX_RPM
-                rpms[i, 1] = collective_rpm - roll_cmd * 0.25 * self.MAX_RPM - pitch_cmd * 0.25 * self.MAX_RPM + yaw_rate_cmd * 0.25 * self.MAX_RPM
-                rpms[i, 2] = collective_rpm - roll_cmd * 0.25 * self.MAX_RPM + pitch_cmd * 0.25 * self.MAX_RPM - yaw_rate_cmd * 0.25 * self.MAX_RPM
-                rpms[i, 3] = collective_rpm + roll_cmd * 0.25 * self.MAX_RPM + pitch_cmd * 0.25 * self.MAX_RPM + yaw_rate_cmd * 0.25 * self.MAX_RPM
+                rpms[i, 0] = (
+                    collective_rpm
+                    + roll_cmd * 0.25 * self.MAX_RPM
+                    - pitch_cmd * 0.25 * self.MAX_RPM
+                    - yaw_rate_cmd * 0.25 * self.MAX_RPM
+                )
+                rpms[i, 1] = (
+                    collective_rpm
+                    - roll_cmd * 0.25 * self.MAX_RPM
+                    - pitch_cmd * 0.25 * self.MAX_RPM
+                    + yaw_rate_cmd * 0.25 * self.MAX_RPM
+                )
+                rpms[i, 2] = (
+                    collective_rpm
+                    - roll_cmd * 0.25 * self.MAX_RPM
+                    + pitch_cmd * 0.25 * self.MAX_RPM
+                    - yaw_rate_cmd * 0.25 * self.MAX_RPM
+                )
+                rpms[i, 3] = (
+                    collective_rpm
+                    + roll_cmd * 0.25 * self.MAX_RPM
+                    + pitch_cmd * 0.25 * self.MAX_RPM
+                    + yaw_rate_cmd * 0.25 * self.MAX_RPM
+                )
             return np.clip(rpms, 0, self.MAX_RPM)
 
         raise ValueError(f"Unknown action type: {self.ACT_TYPE}")
@@ -1072,30 +1220,49 @@ class BaseAviary(gym.Env):
         else:
             raise ValueError(f"Unknown action type: {self.ACT_TYPE}")
 
-        return spaces.Box(low=act_lower.astype(np.float32), high=act_upper.astype(np.float32))
+        return spaces.Box(
+            low=act_lower.astype(np.float32), high=act_upper.astype(np.float32)
+        )
 
     def _observationSpace(self):
         """Define observation space based on observation type."""
         if self.OBS_TYPE == ObservationType.KIN:
-            # 20-dim per drone: pos(3), quat(4), rpy(3), vel(3), angvel(3), last_action(4)
+            """20-dim per drone: pos(3), quat(4), 
+                rpy(3), vel(3), angvel(3), last_action(4)"""
             obs_lower = np.full(20 * self.NUM_DRONES, -np.inf)
             obs_upper = np.full(20 * self.NUM_DRONES, np.inf)
-            return spaces.Box(low=obs_lower.astype(np.float32), high=obs_upper.astype(np.float32))
+            return spaces.Box(
+                low=obs_lower.astype(np.float32), high=obs_upper.astype(np.float32)
+            )
         elif self.OBS_TYPE == ObservationType.RGB:
             return spaces.Box(
-                low=0, high=255,
+                low=0,
+                high=255,
                 shape=(self.NUM_DRONES, 48, 64, 4),
                 dtype=np.uint8,
             )
         elif self.OBS_TYPE == ObservationType.KIN_RGB:
-            obs = spaces.Dict({
-                "kin": spaces.Box(low=-np.inf, high=np.inf, shape=(20 * self.NUM_DRONES,), dtype=np.float32),
-                "rgb": spaces.Box(low=0, high=255, shape=(self.NUM_DRONES, 48, 64, 3), dtype=np.uint8),
-            })
+            obs = spaces.Dict(
+                {
+                    "kin": spaces.Box(
+                        low=-np.inf,
+                        high=np.inf,
+                        shape=(20 * self.NUM_DRONES,),
+                        dtype=np.float32,
+                    ),
+                    "rgb": spaces.Box(
+                        low=0,
+                        high=255,
+                        shape=(self.NUM_DRONES, 48, 64, 3),
+                        dtype=np.uint8,
+                    ),
+                }
+            )
 
             if self.GIMBAL_CONTROL:
                 obs.spaces["gimbal_rgb"] = spaces.Box(
-                    low=0, high=255,
+                    low=0,
+                    high=255,
                     shape=(self.NUM_DRONES, 48, 64, 3),
                     dtype=np.uint8,
                 )
@@ -1110,7 +1277,9 @@ class BaseAviary(gym.Env):
     def _computeObs(self):
         """Compute observation."""
         if self.OBS_TYPE == ObservationType.KIN:
-            obs = np.hstack([self._getDroneStateVector(i) for i in range(self.NUM_DRONES)])
+            obs = np.hstack(
+                [self._getDroneStateVector(i) for i in range(self.NUM_DRONES)]
+            )
             return obs.astype(np.float32)
         elif self.OBS_TYPE == ObservationType.RGB:
             images = [self._getDroneImages(i) for i in range(self.NUM_DRONES)]
@@ -1118,18 +1287,27 @@ class BaseAviary(gym.Env):
 
             if self.GIMBAL_CONTROL:
                 gimbal_imgs = np.stack([img[3] for img in images])
-                return {"kin": kin.astype(np.float32), "rgb": imgs, "gimbal_rgb": gimbal_imgs}
+                return {
+                    "rgb": imgs,
+                    "gimbal_rgb": gimbal_imgs,
+                }
 
             return {"rgb": imgs}
         elif self.OBS_TYPE == ObservationType.KIN_RGB:
-            kin = np.hstack([self._getDroneStateVector(i) for i in range(self.NUM_DRONES)])
+            kin = np.hstack(
+                [self._getDroneStateVector(i) for i in range(self.NUM_DRONES)]
+            )
 
             images = [self._getDroneImages(i) for i in range(self.NUM_DRONES)]
             imgs = np.stack([img[0] for img in images])
 
             if self.GIMBAL_CONTROL:
                 gimbal_imgs = np.stack([img[3] for img in images])
-                return {"kin": kin.astype(np.float32), "rgb": imgs, "gimbal_rgb": gimbal_imgs}
+                return {
+                    "kin": kin.astype(np.float32),
+                    "rgb": imgs,
+                    "gimbal_rgb": gimbal_imgs,
+                }
 
             return {"kin": kin.astype(np.float32), "rgb": imgs}
         return np.array([])
@@ -1155,10 +1333,10 @@ class BaseAviary(gym.Env):
     ############################################################################
 
     # Camera mode constants
-    CAMERA_TRACK = "track"       # Follows drone from fixed distance
-    CAMERA_FPV = "fpv"           # First-person (egocentric) from drone
-    CAMERA_FIXED = "fixed"       # Fixed third-person view
-    CAMERA_FRONT = "front"       # Front view looking along X-axis
+    CAMERA_TRACK = "track"  # Follows drone from fixed distance
+    CAMERA_FPV = "fpv"  # First-person (egocentric) from drone
+    CAMERA_FIXED = "fixed"  # Fixed third-person view
+    CAMERA_FRONT = "front"  # Front view looking along X-axis
 
     def render(self, camera_mode=None, track_drone_id=0):
         """Render the environment.
@@ -1187,12 +1365,15 @@ class BaseAviary(gym.Env):
             if camera_mode == self.CAMERA_FPV:
                 # First-person: use drone's onboard camera if available
                 cam_name = f"drone{track_drone_id}_cam"
-                cam_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, cam_name)
+                cam_id = mujoco.mj_name2id(
+                    self.model, mujoco.mjtObj.mjOBJ_CAMERA, cam_name
+                )
                 if cam_id >= 0:
                     self._renderer.update_scene(self.data, camera=cam_name)
                     return self._renderer.render()
                 else:
-                    # Fallback: place virtual FPV camera at drone position looking forward
+                    """ Fallback: place virtual FPV camera 
+                        at drone position looking forward """
                     camera.type = mujoco.mjtCamera.mjCAMERA_FREE
                     pos = self.pos[track_drone_id]
                     # Look ahead in x direction from drone's POV
@@ -1237,6 +1418,7 @@ class BaseAviary(gym.Env):
     def _saveFrame(self):
         """Save a frame to disk for recording."""
         from PIL import Image as PILImage
+
         if self._renderer is None:
             self._renderer = mujoco.Renderer(self.model, height=480, width=640)
         self._renderer.update_scene(self.data)
@@ -1263,6 +1445,7 @@ class BaseAviary(gym.Env):
             Wind model configuration. Import from multi_drone_mujoco.wrappers.wind.
         """
         from multi_drone_mujoco.wrappers.wind import WindField
+
         self._wind_field = WindField(wind_config)
 
     ############################################################################

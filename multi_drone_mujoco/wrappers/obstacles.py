@@ -10,29 +10,34 @@ Generates randomized obstacle-rich environments:
 Obstacles are added as MuJoCo geoms in the world body XML.
 """
 
-import numpy as np
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
 from enum import Enum
+from typing import List, Optional
+
+import numpy as np
 
 
 class ObstacleType(Enum):
     """Pre-defined obstacle environment types."""
+
     NONE = "none"
     FOREST = "forest"
     URBAN = "urban"
     INDOOR = "indoor"
     RANDOM = "random"
-    GATES = "gates"          # Racing gates
+    GATES = "gates"  # Racing gates
     CUSTOM = "custom"
 
 
 @dataclass
 class Obstacle:
     """Single obstacle definition."""
-    geom_type: str           # "box", "cylinder", "sphere", "capsule"
-    position: np.ndarray     # [x, y, z]
-    size: np.ndarray         # depends on type (half-sizes for box, radius+half-height for cylinder)
+
+    geom_type: str  # "box", "cylinder", "sphere", "capsule"
+    position: np.ndarray  # [x, y, z]
+    size: (
+        np.ndarray
+    )  # depends on type (half-sizes for box, radius+half-height for cylinder)
     rgba: np.ndarray = field(default_factory=lambda: np.array([0.5, 0.5, 0.5, 1.0]))
     euler: np.ndarray = field(default_factory=lambda: np.zeros(3))
 
@@ -58,6 +63,7 @@ class ObstacleConfig:
     custom_obstacles : list
         List of Obstacle objects for CUSTOM type.
     """
+
     obstacle_type: ObstacleType = ObstacleType.NONE
     num_obstacles: int = 20
     arena_size: tuple = (3.0, 3.0, 2.5)
@@ -105,7 +111,9 @@ def obstacles_to_xml(obstacles: List[Obstacle]) -> str:
     lines = []
     for i, obs in enumerate(obstacles):
         pos_str = f"{obs.position[0]:.4f} {obs.position[1]:.4f} {obs.position[2]:.4f}"
-        rgba_str = f"{obs.rgba[0]:.3f} {obs.rgba[1]:.3f} {obs.rgba[2]:.3f} {obs.rgba[3]:.3f}"
+        rgba_str = (
+            f"{obs.rgba[0]:.3f} {obs.rgba[1]:.3f} {obs.rgba[2]:.3f} {obs.rgba[3]:.3f}"
+        )
 
         if obs.geom_type == "box":
             size_str = f"{obs.size[0]:.4f} {obs.size[1]:.4f} {obs.size[2]:.4f}"
@@ -122,13 +130,14 @@ def obstacles_to_xml(obstacles: List[Obstacle]) -> str:
             f'\n      <geom type="{obs.geom_type}" size="{size_str}" '
             f'rgba="{rgba_str}" euler="{euler_str}" '
             f'contype="1" conaffinity="1"/>'
-            f'\n    </body>'
+            f"\n    </body>"
         )
     return "\n".join(lines)
 
 
-def _try_place(position: np.ndarray, placed: List[np.ndarray],
-               config: ObstacleConfig) -> bool:
+def _try_place(
+    position: np.ndarray, placed: List[np.ndarray], config: ObstacleConfig
+) -> bool:
     """Check if position is valid (min spacing + safe zone)."""
     # Check safe zones
     if config.safe_zone_centers is not None:
@@ -142,14 +151,18 @@ def _try_place(position: np.ndarray, placed: List[np.ndarray],
     return True
 
 
-def _generate_forest(config: ObstacleConfig, rng: np.random.Generator) -> List[Obstacle]:
+def _generate_forest(
+    config: ObstacleConfig, rng: np.random.Generator
+) -> List[Obstacle]:
     """Generate forest of cylindrical trees."""
     obstacles = []
     placed = []
     xh, yh, zh = config.arena_size
     attempts = 0
 
-    while len(obstacles) < config.num_obstacles and attempts < config.num_obstacles * 20:
+    while (
+        len(obstacles) < config.num_obstacles and attempts < config.num_obstacles * 20
+    ):
         attempts += 1
         x = rng.uniform(-xh, xh)
         y = rng.uniform(-yh, yh)
@@ -163,12 +176,14 @@ def _generate_forest(config: ObstacleConfig, rng: np.random.Generator) -> List[O
         # Brown/green tree colors
         g = rng.uniform(0.2, 0.5)
         rgba = np.array([rng.uniform(0.3, 0.6), g, rng.uniform(0.1, 0.3), 1.0])
-        obstacles.append(Obstacle(
-            geom_type="cylinder",
-            position=pos,
-            size=np.array([radius, height / 2]),
-            rgba=rgba,
-        ))
+        obstacles.append(
+            Obstacle(
+                geom_type="cylinder",
+                position=pos,
+                size=np.array([radius, height / 2]),
+                rgba=rgba,
+            )
+        )
         placed.append(pos)
 
     return obstacles
@@ -181,7 +196,9 @@ def _generate_urban(config: ObstacleConfig, rng: np.random.Generator) -> List[Ob
     xh, yh, zh = config.arena_size
     attempts = 0
 
-    while len(obstacles) < config.num_obstacles and attempts < config.num_obstacles * 20:
+    while (
+        len(obstacles) < config.num_obstacles and attempts < config.num_obstacles * 20
+    ):
         attempts += 1
         x = rng.uniform(-xh, xh)
         y = rng.uniform(-yh, yh)
@@ -196,18 +213,22 @@ def _generate_urban(config: ObstacleConfig, rng: np.random.Generator) -> List[Ob
         # Gray concrete colors
         gray = rng.uniform(0.3, 0.7)
         rgba = np.array([gray, gray, gray * rng.uniform(0.9, 1.1), 1.0])
-        obstacles.append(Obstacle(
-            geom_type="box",
-            position=pos,
-            size=np.array([sx, sy, sz / 2]),
-            rgba=rgba,
-        ))
+        obstacles.append(
+            Obstacle(
+                geom_type="box",
+                position=pos,
+                size=np.array([sx, sy, sz / 2]),
+                rgba=rgba,
+            )
+        )
         placed.append(pos)
 
     return obstacles
 
 
-def _generate_indoor(config: ObstacleConfig, rng: np.random.Generator) -> List[Obstacle]:
+def _generate_indoor(
+    config: ObstacleConfig, rng: np.random.Generator
+) -> List[Obstacle]:
     """Generate indoor room with walls and furniture-like obstacles."""
     obstacles = []
     xh, yh, zh = config.arena_size
@@ -217,12 +238,37 @@ def _generate_indoor(config: ObstacleConfig, rng: np.random.Generator) -> List[O
     wall_height = zh
     walls = [
         # Four walls
-        Obstacle("box", np.array([xh, 0, wall_height/2]), np.array([wall_thickness, yh, wall_height/2]), np.array([0.8, 0.8, 0.75, 1.0])),
-        Obstacle("box", np.array([-xh, 0, wall_height/2]), np.array([wall_thickness, yh, wall_height/2]), np.array([0.8, 0.8, 0.75, 1.0])),
-        Obstacle("box", np.array([0, yh, wall_height/2]), np.array([xh, wall_thickness, wall_height/2]), np.array([0.8, 0.8, 0.75, 1.0])),
-        Obstacle("box", np.array([0, -yh, wall_height/2]), np.array([xh, wall_thickness, wall_height/2]), np.array([0.8, 0.8, 0.75, 1.0])),
+        Obstacle(
+            "box",
+            np.array([xh, 0, wall_height / 2]),
+            np.array([wall_thickness, yh, wall_height / 2]),
+            np.array([0.8, 0.8, 0.75, 1.0]),
+        ),
+        Obstacle(
+            "box",
+            np.array([-xh, 0, wall_height / 2]),
+            np.array([wall_thickness, yh, wall_height / 2]),
+            np.array([0.8, 0.8, 0.75, 1.0]),
+        ),
+        Obstacle(
+            "box",
+            np.array([0, yh, wall_height / 2]),
+            np.array([xh, wall_thickness, wall_height / 2]),
+            np.array([0.8, 0.8, 0.75, 1.0]),
+        ),
+        Obstacle(
+            "box",
+            np.array([0, -yh, wall_height / 2]),
+            np.array([xh, wall_thickness, wall_height / 2]),
+            np.array([0.8, 0.8, 0.75, 1.0]),
+        ),
         # Ceiling
-        Obstacle("box", np.array([0, 0, zh]), np.array([xh, yh, wall_thickness]), np.array([0.9, 0.9, 0.85, 1.0])),
+        Obstacle(
+            "box",
+            np.array([0, 0, zh]),
+            np.array([xh, yh, wall_thickness]),
+            np.array([0.9, 0.9, 0.85, 1.0]),
+        ),
     ]
     obstacles.extend(walls)
 
@@ -237,7 +283,11 @@ def _generate_indoor(config: ObstacleConfig, rng: np.random.Generator) -> List[O
         kind = rng.choice(["table", "column", "shelf"])
 
         if kind == "table":
-            sx, sy, sz = rng.uniform(0.2, 0.5), rng.uniform(0.2, 0.5), rng.uniform(0.3, 0.8)
+            sx, sy, sz = (
+                rng.uniform(0.2, 0.5),
+                rng.uniform(0.2, 0.5),
+                rng.uniform(0.3, 0.8),
+            )
             pos = np.array([x, y, sz / 2])
             geom = "box"
             size = np.array([sx, sy, sz / 2])
@@ -262,14 +312,18 @@ def _generate_indoor(config: ObstacleConfig, rng: np.random.Generator) -> List[O
     return obstacles
 
 
-def _generate_random(config: ObstacleConfig, rng: np.random.Generator) -> List[Obstacle]:
+def _generate_random(
+    config: ObstacleConfig, rng: np.random.Generator
+) -> List[Obstacle]:
     """Generate random mix of obstacles."""
     obstacles = []
     placed = []
     xh, yh, zh = config.arena_size
     attempts = 0
 
-    while len(obstacles) < config.num_obstacles and attempts < config.num_obstacles * 20:
+    while (
+        len(obstacles) < config.num_obstacles and attempts < config.num_obstacles * 20
+    ):
         attempts += 1
         x = rng.uniform(-xh, xh)
         y = rng.uniform(-yh, yh)
@@ -319,27 +373,36 @@ def _generate_gates(config: ObstacleConfig, rng: np.random.Generator) -> List[Ob
         # Left pillar
         lx = cx + gate_w / 2 * cos_y
         ly = cy + gate_w / 2 * sin_y
-        obstacles.append(Obstacle(
-            "box", np.array([lx, ly, gate_h / 2]),
-            np.array([thickness, thickness, gate_h / 2]),
-            np.array([1.0, 0.3, 0.1, 1.0]),
-            np.array([0, 0, yaw]),
-        ))
+        obstacles.append(
+            Obstacle(
+                "box",
+                np.array([lx, ly, gate_h / 2]),
+                np.array([thickness, thickness, gate_h / 2]),
+                np.array([1.0, 0.3, 0.1, 1.0]),
+                np.array([0, 0, yaw]),
+            )
+        )
         # Right pillar
         rx = cx - gate_w / 2 * cos_y
         ry = cy - gate_w / 2 * sin_y
-        obstacles.append(Obstacle(
-            "box", np.array([rx, ry, gate_h / 2]),
-            np.array([thickness, thickness, gate_h / 2]),
-            np.array([1.0, 0.3, 0.1, 1.0]),
-            np.array([0, 0, yaw]),
-        ))
+        obstacles.append(
+            Obstacle(
+                "box",
+                np.array([rx, ry, gate_h / 2]),
+                np.array([thickness, thickness, gate_h / 2]),
+                np.array([1.0, 0.3, 0.1, 1.0]),
+                np.array([0, 0, yaw]),
+            )
+        )
         # Top bar
-        obstacles.append(Obstacle(
-            "box", np.array([cx, cy, gate_h]),
-            np.array([thickness, gate_w / 2, thickness]),
-            np.array([1.0, 0.3, 0.1, 1.0]),
-            np.array([0, 0, yaw]),
-        ))
+        obstacles.append(
+            Obstacle(
+                "box",
+                np.array([cx, cy, gate_h]),
+                np.array([thickness, gate_w / 2, thickness]),
+                np.array([1.0, 0.3, 0.1, 1.0]),
+                np.array([0, 0, yaw]),
+            )
+        )
 
     return obstacles

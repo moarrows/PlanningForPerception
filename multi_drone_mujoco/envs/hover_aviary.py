@@ -9,7 +9,12 @@ import numpy as np
 from gymnasium import spaces
 
 from multi_drone_mujoco.envs.base_aviary import BaseAviary
-from multi_drone_mujoco.utils.enums import DroneModel, Physics, ActionType, ObservationType
+from multi_drone_mujoco.utils.enums import (
+    ActionType,
+    DroneModel,
+    ObservationType,
+    Physics,
+)
 
 
 class HoverAviary(BaseAviary):
@@ -50,7 +55,9 @@ class HoverAviary(BaseAviary):
 
     def _actionSpace(self):
         """Normalized [-1, 1] → mapped to RPM internally."""
-        return spaces.Box(low=-np.ones(4, dtype=np.float32), high=np.ones(4, dtype=np.float32))
+        return spaces.Box(
+            low=-np.ones(4, dtype=np.float32), high=np.ones(4, dtype=np.float32)
+        )
 
     def _observationSpace(self):
         """12-dim observation: pos, rpy, vel, ang_vel."""

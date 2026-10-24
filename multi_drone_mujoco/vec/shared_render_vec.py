@@ -25,21 +25,24 @@ from __future__ import annotations
 import multiprocessing as mp
 import traceback
 from collections import OrderedDict
-from typing import Any, Callable, List, Optional, Sequence, Tuple
+from typing import Any, Callable, List, Optional
 
-import numpy as np
 import gymnasium as gym
-
+import numpy as np
 from stable_baselines3.common.vec_env.base_vec_env import (
-    VecEnv, CloudpickleWrapper, VecEnvIndices, VecEnvObs, VecEnvStepReturn,
+    CloudpickleWrapper,
+    VecEnv,
+    VecEnvIndices,
+    VecEnvObs,
+    VecEnvStepReturn,
 )
 
 from multi_drone_mujoco.rendering import SharedStaticRenderer
 
-
 # --------------------------------------------------------------------------
 # observation stacking
 # --------------------------------------------------------------------------
+
 
 def _stack_obs(obs_list: List[Any], space: gym.Space):
     """Stack a list of per-env observations into batched form.
@@ -76,8 +79,10 @@ def _split_indices(n_envs: int, n_workers: int) -> List[List[int]]:
 # worker
 # --------------------------------------------------------------------------
 
-def _worker(remote, parent_remote, env_fns_wrapper, want_seg: bool,
-            state_transfer: str) -> None:
+
+def _worker(
+    remote, parent_remote, env_fns_wrapper, want_seg: bool, state_transfer: str
+) -> None:
     """Serve one group of envs.
 
     Every reply is tagged ``("ok", payload)`` or ``("error", traceback)``. Without
@@ -172,10 +177,13 @@ def _worker(remote, parent_remote, env_fns_wrapper, want_seg: bool,
 
             elif cmd == "env_method":
                 name, args, kwargs = data
-                remote.send(("ok", [getattr(env, name)(*args, **kwargs) for env in envs]))
+                remote.send(
+                    ("ok", [getattr(env, name)(*args, **kwargs) for env in envs])
+                )
 
             elif cmd == "is_wrapped":
                 from stable_baselines3.common import env_util
+
                 remote.send(("ok", [env_util.is_wrapped(env, data) for env in envs]))
 
             elif cmd == "render_stats":
@@ -203,6 +211,7 @@ def _worker(remote, parent_remote, env_fns_wrapper, want_seg: bool,
 # VecEnv
 # --------------------------------------------------------------------------
 
+
 class SharedRenderVecEnv(VecEnv):
     """N envs over M processes, each process owning one shared GL context.
 
@@ -221,9 +230,14 @@ class SharedRenderVecEnv(VecEnv):
         Defaults to forkserver where available, else spawn (matching SB3).
     """
 
-    def __init__(self, env_fns: List[Callable[[], gym.Env]], n_workers: int,
-                 want_seg: bool = False, start_method: Optional[str] = None,
-                 state_transfer: str = "copy"):
+    def __init__(
+        self,
+        env_fns: List[Callable[[], gym.Env]],
+        n_workers: int,
+        want_seg: bool = False,
+        start_method: Optional[str] = None,
+        state_transfer: str = "copy",
+    ):
         self.waiting = False
         self.closed = False
         n_envs = len(env_fns)
@@ -245,8 +259,13 @@ class SharedRenderVecEnv(VecEnv):
             fns = [env_fns[i] for i in group]
             proc = ctx.Process(
                 target=_worker,
-                args=(work_remote, remote, CloudpickleWrapper(fns), want_seg,
-                      state_transfer),
+                args=(
+                    work_remote,
+                    remote,
+                    CloudpickleWrapper(fns),
+                    want_seg,
+                    state_transfer,
+                ),
                 daemon=True,
             )
             proc.start()
@@ -274,8 +293,7 @@ class SharedRenderVecEnv(VecEnv):
                 "likely failed while building its envs or GL context."
             ) from exc
         if tag == "error":
-            raise RuntimeError(
-                "SharedRenderVecEnv: worker raised:\n\n" + str(payload))
+            raise RuntimeError("SharedRenderVecEnv: worker raised:\n\n" + str(payload))
         return payload
 
     # -- stepping ----------------------------------------------------------
@@ -293,10 +311,12 @@ class SharedRenderVecEnv(VecEnv):
         # concatenation restores the caller's indexing exactly.
         results = [r for chunk in per_worker for r in chunk]
         obs, rews, dones, infos = zip(*results)
-        return (_stack_obs(list(obs), self.observation_space),
-                np.array(rews, dtype=np.float32),
-                np.array(dones, dtype=bool),
-                list(infos))
+        return (
+            _stack_obs(list(obs), self.observation_space),
+            np.array(rews, dtype=np.float32),
+            np.array(dones, dtype=bool),
+            list(infos),
+        )
 
     def reset(self) -> VecEnvObs:
         for remote, group in zip(self.remotes, self.groups):
@@ -352,7 +372,9 @@ class SharedRenderVecEnv(VecEnv):
                 cache[id(remote)] = self._recv(remote)
         return [cache[id(remote)][slot] for remote, slot in targets]
 
-    def set_attr(self, attr_name: str, value: Any, indices: VecEnvIndices = None) -> None:
+    def set_attr(
+        self, attr_name: str, value: Any, indices: VecEnvIndices = None
+    ) -> None:
         seen = set()
         for remote, _ in self._remotes_for(indices):
             if id(remote) not in seen:
@@ -360,8 +382,13 @@ class SharedRenderVecEnv(VecEnv):
                 self._recv(remote)
                 seen.add(id(remote))
 
-    def env_method(self, method_name: str, *method_args,
-                   indices: VecEnvIndices = None, **method_kwargs) -> List[Any]:
+    def env_method(
+        self,
+        method_name: str,
+        *method_args,
+        indices: VecEnvIndices = None,
+        **method_kwargs,
+    ) -> List[Any]:
         targets = self._remotes_for(indices)
         cache = {}
         for remote, _ in targets:
@@ -370,7 +397,9 @@ class SharedRenderVecEnv(VecEnv):
                 cache[id(remote)] = self._recv(remote)
         return [cache[id(remote)][slot] for remote, slot in targets]
 
-    def env_is_wrapped(self, wrapper_class, indices: VecEnvIndices = None) -> List[bool]:
+    def env_is_wrapped(
+        self, wrapper_class, indices: VecEnvIndices = None
+    ) -> List[bool]:
         targets = self._remotes_for(indices)
         cache = {}
         for remote, _ in targets:

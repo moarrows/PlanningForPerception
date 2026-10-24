@@ -1,11 +1,12 @@
 """Tests for multi-agent (PettingZoo) wrapper."""
 
-import numpy as np
 import pytest
 
 try:
     import pettingzoo
+
     from multi_drone_mujoco.envs.multi_agent_aviary import MultiAgentAviary
+
     HAS_PETTINGZOO = True
 except (ImportError, ModuleNotFoundError):
     HAS_PETTINGZOO = False

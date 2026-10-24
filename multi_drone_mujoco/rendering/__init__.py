@@ -9,6 +9,6 @@ because a silently-wrong assertion produces wrong pixels rather than an error.
 See multi_drone_mujoco/bench/ for the verification and benchmark harnesses.
 """
 
-from .shared import SharedStaticRenderer, RenderStats
+from .shared import RenderStats, SharedStaticRenderer
 
 __all__ = ["SharedStaticRenderer", "RenderStats"]

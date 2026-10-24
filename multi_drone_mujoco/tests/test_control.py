@@ -1,11 +1,10 @@
 """Tests for PID controllers."""
 
 import numpy as np
-import pytest
 
-from multi_drone_mujoco.envs.base_aviary import BaseAviary
-from multi_drone_mujoco.control.pid_control import PIDControl
 from multi_drone_mujoco.control.dsl_pid_control import DSLPIDControl
+from multi_drone_mujoco.control.pid_control import PIDControl
+from multi_drone_mujoco.envs.base_aviary import BaseAviary
 from multi_drone_mujoco.utils.enums import Physics
 
 
@@ -20,8 +19,12 @@ class TestPIDControl:
         target = np.array([0, 0, 1.0])
         for _ in range(2400):
             rpm, _, _ = ctrl.computeControl(
-                env.CTRL_TIMESTEP, env.pos[0], env.quat[0],
-                env.vel[0], env.ang_v[0], target
+                env.CTRL_TIMESTEP,
+                env.pos[0],
+                env.quat[0],
+                env.vel[0],
+                env.ang_v[0],
+                target,
             )
             env.step(rpm.flatten())
         error = np.linalg.norm(env.pos[0] - target)
@@ -36,8 +39,12 @@ class TestPIDControl:
         target = np.array([0.5, 0.3, 1.0])
         for _ in range(4800):
             rpm, _, _ = ctrl.computeControl(
-                env.CTRL_TIMESTEP, env.pos[0], env.quat[0],
-                env.vel[0], env.ang_v[0], target
+                env.CTRL_TIMESTEP,
+                env.pos[0],
+                env.quat[0],
+                env.vel[0],
+                env.ang_v[0],
+                target,
             )
             env.step(rpm.flatten())
         error = np.linalg.norm(env.pos[0] - target)
@@ -53,8 +60,12 @@ class TestPIDControl:
         saturated = False
         for _ in range(1200):
             rpm, _, _ = ctrl.computeControl(
-                env.CTRL_TIMESTEP, env.pos[0], env.quat[0],
-                env.vel[0], env.ang_v[0], target
+                env.CTRL_TIMESTEP,
+                env.pos[0],
+                env.quat[0],
+                env.vel[0],
+                env.ang_v[0],
+                target,
             )
             if np.any(rpm >= env.MAX_RPM * 0.99) or np.any(rpm <= 1.0):
                 saturated = True
@@ -80,8 +91,12 @@ class TestDSLPIDControl:
         target = np.array([0.5, 0.3, 1.0])
         for _ in range(4800):
             rpm, _, _ = ctrl.computeControl(
-                env.CTRL_TIMESTEP, env.pos[0], env.quat[0],
-                env.vel[0], env.ang_v[0], target
+                env.CTRL_TIMESTEP,
+                env.pos[0],
+                env.quat[0],
+                env.vel[0],
+                env.ang_v[0],
+                target,
             )
             env.step(rpm.flatten())
         error = np.linalg.norm(env.pos[0] - target)

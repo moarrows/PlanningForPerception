@@ -16,7 +16,9 @@ class Logger:
     actions (RPMs), and rewards.
     """
 
-    def __init__(self, num_drones: int, logging_freq: int = 48, output_folder: str = "results"):
+    def __init__(
+        self, num_drones: int, logging_freq: int = 48, output_folder: str = "results"
+    ):
         self.NUM_DRONES = num_drones
         self.LOGGING_FREQ = logging_freq
         self.OUTPUT_FOLDER = output_folder
@@ -79,13 +81,19 @@ class Logger:
             rpys = np.array(self._rpys[d])
             ang_vels = np.array(self._ang_vels[d])
             actions = np.array(self._actions[d])
-            timestamps = np.array(self._timestamps[:len(positions)])
+            timestamps = np.array(self._timestamps[: len(positions)])
 
             header = "t,x,y,z,vx,vy,vz,roll,pitch,yaw,wx,wy,wz,rpm0,rpm1,rpm2,rpm3"
-            data = np.column_stack([
-                timestamps.reshape(-1, 1),
-                positions, velocities, rpys, ang_vels, actions,
-            ])
+            data = np.column_stack(
+                [
+                    timestamps.reshape(-1, 1),
+                    positions,
+                    velocities,
+                    rpys,
+                    ang_vels,
+                    actions,
+                ]
+            )
             np.savetxt(filepath, data, delimiter=",", header=header, comments="")
             print(f"[Logger] Saved drone {d} data to {filepath}")
 
@@ -111,7 +119,7 @@ class Logger:
         velocities = np.array(self._velocities[drone])
         rpys = np.array(self._rpys[drone])
         actions = np.array(self._actions[drone])
-        timestamps = np.array(self._timestamps[:len(positions)])
+        timestamps = np.array(self._timestamps[: len(positions)])
 
         fig, axes = plt.subplots(4, 1, figsize=(12, 10), sharex=True)
 
@@ -142,7 +150,9 @@ class Logger:
         # Actions
         if len(actions) > 0:
             for m in range(4):
-                axes[3].plot(timestamps[:len(actions)], actions[:, m], label=f"motor{m}")
+                axes[3].plot(
+                    timestamps[: len(actions)], actions[:, m], label=f"motor{m}"
+                )
             axes[3].set_ylabel("RPM")
             axes[3].legend()
             axes[3].grid(True)
@@ -173,8 +183,13 @@ class Logger:
         colors = plt.cm.tab10(np.linspace(0, 1, self.NUM_DRONES))
         for d in range(self.NUM_DRONES):
             positions = np.array(self._positions[d])
-            ax.plot(positions[:, 0], positions[:, 1], positions[:, 2],
-                    color=colors[d], label=f"Drone {d}")
+            ax.plot(
+                positions[:, 0],
+                positions[:, 1],
+                positions[:, 2],
+                color=colors[d],
+                label=f"Drone {d}",
+            )
             ax.scatter(*positions[0], color=colors[d], marker="o", s=50)
             ax.scatter(*positions[-1], color=colors[d], marker="x", s=50)
 

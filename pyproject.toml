@@ -30,6 +30,7 @@ all = [
 ]
 dev = [
     "pytest>=7.0",
+    "ruff",
 ]
 
 [tool.setuptools.packages.find]
@@ -37,3 +38,19 @@ include = ["multi_drone_mujoco*"]
 
 [tool.pytest.ini_options]
 testpaths = ["multi_drone_mujoco/tests"]
+
+[tool.ruff]
+line-length = 88
+exclude = [
+    "./*/__init__.py",
+    "./multi_drone_mujoco/tests",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle
+    "F",     # Pyflakes — unused imports, variables, etc.
+]
+
+[tool.ruff.format]
+quote-style = "double"

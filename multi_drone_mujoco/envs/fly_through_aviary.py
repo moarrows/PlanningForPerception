@@ -7,7 +7,12 @@ import numpy as np
 from gymnasium import spaces
 
 from multi_drone_mujoco.envs.base_aviary import BaseAviary
-from multi_drone_mujoco.utils.enums import DroneModel, Physics, ActionType, ObservationType
+from multi_drone_mujoco.utils.enums import (
+    ActionType,
+    DroneModel,
+    ObservationType,
+    Physics,
+)
 
 
 class FlyThroughAviary(BaseAviary):
@@ -31,17 +36,21 @@ class FlyThroughAviary(BaseAviary):
         self.WAYPOINT_RADIUS = waypoint_radius
 
         if waypoints is None:
-            self.WAYPOINTS = np.array([
-                [0.0, 0.0, 1.0],
-                [1.0, 0.0, 1.0],
-                [1.0, 1.0, 1.5],
-                [0.0, 1.0, 1.0],
-                [0.0, 0.0, 0.5],
-            ])
+            self.WAYPOINTS = np.array(
+                [
+                    [0.0, 0.0, 1.0],
+                    [1.0, 0.0, 1.0],
+                    [1.0, 1.0, 1.5],
+                    [0.0, 1.0, 1.0],
+                    [0.0, 0.0, 0.5],
+                ]
+            )
         else:
             self.WAYPOINTS = np.array(waypoints)
 
-        self.current_waypoint_idx = np.zeros(num_drones if num_drones > 1 else 1, dtype=int)
+        self.current_waypoint_idx = np.zeros(
+            num_drones if num_drones > 1 else 1, dtype=int
+        )
 
         if initial_xyzs is None:
             initial_xyzs = np.array([[0.0, 0.0, 0.1]])
@@ -72,7 +81,9 @@ class FlyThroughAviary(BaseAviary):
 
     def _observationSpace(self):
         # pos(3) + rpy(3) + vel(3) + angvel(3) + next_waypoint(3) + rel_waypoint(3) = 18
-        return spaces.Box(low=-np.inf, high=np.inf, shape=(18 * self.NUM_DRONES,), dtype=np.float32)
+        return spaces.Box(
+            low=-np.inf, high=np.inf, shape=(18 * self.NUM_DRONES,), dtype=np.float32
+        )
 
     def _preprocessAction(self, action):
         action = np.clip(np.array(action).reshape(self.NUM_DRONES, 4), -1, 1)
@@ -88,9 +99,18 @@ class FlyThroughAviary(BaseAviary):
             wp_idx = min(self.current_waypoint_idx[i], len(self.WAYPOINTS) - 1)
             wp = self.WAYPOINTS[wp_idx]
             rel_wp = wp - self.pos[i]
-            obs_list.append(np.hstack([
-                state[0:3], state[7:10], state[10:13], state[13:16], wp, rel_wp,
-            ]))
+            obs_list.append(
+                np.hstack(
+                    [
+                        state[0:3],
+                        state[7:10],
+                        state[10:13],
+                        state[13:16],
+                        wp,
+                        rel_wp,
+                    ]
+                )
+            )
         return np.concatenate(obs_list).astype(np.float32)
 
     def _computeReward(self):
@@ -101,7 +121,9 @@ class FlyThroughAviary(BaseAviary):
             dist = np.linalg.norm(self.pos[i] - wp)
 
             # Check waypoint reached
-            if dist < self.WAYPOINT_RADIUS and self.current_waypoint_idx[i] < len(self.WAYPOINTS):
+            if dist < self.WAYPOINT_RADIUS and self.current_waypoint_idx[i] < len(
+                self.WAYPOINTS
+            ):
                 self.current_waypoint_idx[i] += 1
                 total += 10.0  # Big bonus for reaching waypoint
 

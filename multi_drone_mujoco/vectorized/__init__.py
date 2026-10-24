@@ -37,7 +37,8 @@ _MJX_AVAILABLE = False
 try:
     import jax
     import jax.numpy as jnp
-    from jax import random, vmap, jit, lax
+    from jax import jit, lax, random, vmap
+
     _JAX_AVAILABLE = True
 except ImportError:
     pass
@@ -45,11 +46,13 @@ except ImportError:
 try:
     import mujoco
     from mujoco import mjx
+
     _MJX_AVAILABLE = True
 except (ImportError, AttributeError):
     try:
         import mujoco
         import mujoco.mjx as mjx
+
         _MJX_AVAILABLE = True
     except (ImportError, AttributeError):
         pass
@@ -70,11 +73,12 @@ def _check_deps():
 
 class MJXState(NamedTuple):
     """State container for vectorized simulation."""
-    mjx_data: Any          # mjx.Data (batched)
-    step_count: Any        # jnp.ndarray (num_envs,)
-    rng: Any               # PRNGKey
-    done: Any              # jnp.ndarray (num_envs,) bool
-    info: Dict[str, Any]   # additional info
+
+    mjx_data: Any  # mjx.Data (batched)
+    step_count: Any  # jnp.ndarray (num_envs,)
+    rng: Any  # PRNGKey
+    done: Any  # jnp.ndarray (num_envs,) bool
+    info: Dict[str, Any]  # additional info
 
 
 class MJXVectorAviary:
@@ -151,7 +155,7 @@ class MJXVectorAviary:
 
         # Shapes
         self.obs_dim = 12 * num_drones  # pos(3) + rpy(3) + vel(3) + angvel(3)
-        self.act_dim = 4 * num_drones   # normalized RPM per motor
+        self.act_dim = 4 * num_drones  # normalized RPM per motor
 
         # JIT-compile core functions
         self._step_fn = jit(vmap(self._single_step))
@@ -182,8 +186,7 @@ class MJXVectorAviary:
         # Initialize mjx data for each env
         mjx_data = mjx.put_data(self._mj_model, mujoco.MjData(self._mj_model))
         batched_data = jax.tree.map(
-            lambda x: jnp.broadcast_to(x, (self.num_envs, *x.shape)).copy(),
-            mjx_data
+            lambda x: jnp.broadcast_to(x, (self.num_envs, *x.shape)).copy(), mjx_data
         )
         state = MJXState(
             mjx_data=batched_data,
@@ -196,7 +199,9 @@ class MJXVectorAviary:
         state = self._reset_fn(state, rngs)
         return state
 
-    def step(self, state: MJXState, action: Any) -> Tuple[MJXState, Any, Any, Any, Dict]:
+    def step(
+        self, state: MJXState, action: Any
+    ) -> Tuple[MJXState, Any, Any, Any, Dict]:
         """Step all environments in parallel.
 
         Parameters
@@ -228,13 +233,15 @@ class MJXVectorAviary:
         """Extract observations from state."""
         return vmap(self._single_obs)(state.mjx_data)
 
-    def _single_step(self, state: MJXState, action: Any) -> Tuple[MJXState, Any, Any, Any]:
+    def _single_step(
+        self, state: MJXState, action: Any
+    ) -> Tuple[MJXState, Any, Any, Any]:
         """Step a single environment (vmapped over batch)."""
         # Convert normalized action to RPM
         rpm = (action + 1) / 2 * self.max_rpm  # [-1,1] → [0, max_rpm]
 
         # Compute forces from RPM
-        forces = self.kf * rpm ** 2
+        forces = self.kf * rpm**2
         total_thrust = jnp.sum(forces)
 
         # Apply thrust along body z-axis via xfrc_applied
@@ -313,7 +320,7 @@ class MJXVectorAviary:
         yaw = jnp.arctan2(xmat[1, 0], xmat[0, 0])
         rpy = jnp.array([roll, pitch, yaw])
 
-        vel = data.cvel[body_id, 3:]   # linear velocity
+        vel = data.cvel[body_id, 3:]  # linear velocity
         ang_vel = data.cvel[body_id, :3]  # angular velocity
 
         return jnp.concatenate([pos, rpy, vel, ang_vel])
@@ -328,7 +335,7 @@ class MJXVectorAviary:
             target = jnp.array([0.0, 0.0, self.target_height])
             dist = jnp.linalg.norm(pos - target)
             # Reward: negative distance + action penalty
-            reward = -dist - 0.01 * jnp.sum(action ** 2)
+            reward = -dist - 0.01 * jnp.sum(action**2)
         elif self.task == "stabilize":
             # Penalize velocity and angular velocity
             vel = data.cvel[body_id, 3:]
@@ -358,7 +365,7 @@ class MJXVectorAviary:
     </body>"""
 
         xml = f"""<mujoco model="mjx_aviary">
-  <option integrator="RK4" timestep="{1.0/self.sim_freq}" gravity="0 0 -{self.gravity}"/>
+  <option integrator="RK4" timestep="{1.0 / self.sim_freq}" gravity="0 0 -{self.gravity}"/>
   <compiler autolimits="true"/>
 
   <worldbody>
@@ -398,12 +405,14 @@ class MJXVecEnvGymWrapper:
             -1.0, 1.0, shape=self._env.action_shape, dtype=np.float32
         )
         self.observation_space = gym.spaces.Box(
-            -np.inf, np.inf,
+            -np.inf,
+            np.inf,
             shape=(self.num_envs, *self._env.observation_shape),
             dtype=np.float32,
         )
         self.action_space = gym.spaces.Box(
-            -1.0, 1.0,
+            -1.0,
+            1.0,
             shape=(self.num_envs, *self._env.action_shape),
             dtype=np.float32,
         )

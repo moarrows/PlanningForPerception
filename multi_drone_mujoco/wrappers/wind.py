@@ -9,20 +9,22 @@ Implements multiple wind disturbance models:
 Wind forces are applied as external disturbances during physics stepping.
 """
 
-import numpy as np
 from dataclasses import dataclass
-from typing import Optional
 from enum import Enum
+from typing import Optional
+
+import numpy as np
 
 
 class WindModel(Enum):
     """Available wind disturbance models."""
+
     NONE = "none"
-    CONSTANT = "constant"           # Fixed wind vector
-    GUST = "gust"                   # Random impulses
-    DRYDEN = "dryden"               # Dryden turbulence (continuous)
-    SINUSOIDAL = "sinusoidal"       # Periodic gusting
-    COMBINED = "combined"           # Constant + Dryden + Gusts
+    CONSTANT = "constant"  # Fixed wind vector
+    GUST = "gust"  # Random impulses
+    DRYDEN = "dryden"  # Dryden turbulence (continuous)
+    SINUSOIDAL = "sinusoidal"  # Periodic gusting
+    COMBINED = "combined"  # Constant + Dryden + Gusts
 
 
 @dataclass
@@ -54,17 +56,18 @@ class WindConfig:
     drag_coefficient : float
         Aerodynamic drag factor C_d * A (m^2) for wind force = 0.5*rho*Cd*A*v^2.
     """
+
     model: WindModel = WindModel.NONE
     constant_wind: Optional[np.ndarray] = None  # m/s in world frame
-    gust_intensity: float = 0.005               # N
-    gust_probability: float = 0.02              # per step
+    gust_intensity: float = 0.005  # N
+    gust_probability: float = 0.02  # per step
     gust_duration_steps: int = 10
-    turbulence_intensity: float = 1.0           # sigma scale
-    altitude: float = 1.0                       # m (for Dryden length scale)
-    airspeed: float = 0.5                       # m/s
-    sinusoidal_amplitude: float = 0.003         # N
-    sinusoidal_period: float = 2.0              # seconds
-    drag_coefficient: float = 0.001             # Cd*A for wind drag
+    turbulence_intensity: float = 1.0  # sigma scale
+    altitude: float = 1.0  # m (for Dryden length scale)
+    airspeed: float = 0.5  # m/s
+    sinusoidal_amplitude: float = 0.003  # N
+    sinusoidal_period: float = 2.0  # seconds
+    drag_coefficient: float = 0.001  # Cd*A for wind drag
 
     def __post_init__(self):
         if self.constant_wind is None:
@@ -107,8 +110,9 @@ class WindField:
         self._gust_direction = np.zeros(3)
         self._gust_remaining = 0
 
-    def get_force(self, dt: float, position: np.ndarray,
-                  velocity: np.ndarray) -> np.ndarray:
+    def get_force(
+        self, dt: float, position: np.ndarray, velocity: np.ndarray
+    ) -> np.ndarray:
         """Compute wind disturbance force vector in world frame.
 
         Parameters
@@ -156,7 +160,7 @@ class WindField:
         if speed < 1e-6:
             return np.zeros(3)
         direction = v_rel / speed
-        force_mag = 0.5 * rho * self.config.drag_coefficient * speed ** 2
+        force_mag = 0.5 * rho * self.config.drag_coefficient * speed**2
         return force_mag * direction
 
     def _gust_force(self) -> np.ndarray:
@@ -220,7 +224,7 @@ class WindField:
 
         # Discrete-time update
         alpha = np.exp(-dt / tau)
-        noise_scale = sigma_vec * np.sqrt(1 - alpha ** 2)
+        noise_scale = sigma_vec * np.sqrt(1 - alpha**2)
         self._dryden_state = alpha * self._dryden_state + noise_scale * white
 
         # Convert turbulence velocity to force: F = 0.5*rho*Cd*A*v_turb^2 * sign
@@ -236,9 +240,11 @@ class WindField:
         period = self.config.sinusoidal_period
         omega = 2 * np.pi / period
         # Circular wind pattern in XY plane
-        force = np.array([
-            amp * np.sin(omega * t),
-            amp * np.cos(omega * t),
-            amp * 0.3 * np.sin(2 * omega * t),  # smaller vertical
-        ])
+        force = np.array(
+            [
+                amp * np.sin(omega * t),
+                amp * np.cos(omega * t),
+                amp * 0.3 * np.sin(2 * omega * t),  # smaller vertical
+            ]
+        )
         return force

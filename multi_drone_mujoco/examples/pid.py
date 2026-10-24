@@ -5,11 +5,14 @@ Demonstrates the PID controller flying a single drone to a target position.
 
 import numpy as np
 
-from multi_drone_mujoco.envs.hover_aviary import HoverAviary
-from multi_drone_mujoco.envs.base_aviary import BaseAviary
-from multi_drone_mujoco.control.pid_control import PIDControl
 from multi_drone_mujoco.control.dsl_pid_control import DSLPIDControl
-from multi_drone_mujoco.utils.enums import DroneModel, Physics, ActionType, ObservationType
+from multi_drone_mujoco.control.pid_control import PIDControl
+from multi_drone_mujoco.envs.base_aviary import BaseAviary
+from multi_drone_mujoco.utils.enums import (
+    ActionType,
+    DroneModel,
+    Physics,
+)
 from multi_drone_mujoco.utils.logger import Logger
 
 
@@ -35,7 +38,6 @@ def pid_hover():
     target_pos = np.array([0.0, 0.0, 1.0])
 
     for step in range(480):  # 10 seconds at 48Hz
-        state = env._getDroneStateVector(0)
         rpm, pos_e, yaw_e = ctrl.computeControl(
             control_timestep=env.CTRL_TIMESTEP,
             cur_pos=env.pos[0],
@@ -49,9 +51,15 @@ def pid_hover():
         logger.log(0, step * env.CTRL_TIMESTEP, env._getDroneStateVector(0), rpm)
 
         if step % 48 == 0:
-            print(f"  t={step * env.CTRL_TIMESTEP:5.1f}s | "
-                  f"pos=[{env.pos[0,0]:+.3f}, {env.pos[0,1]:+.3f}, {env.pos[0,2]:+.3f}] | "
-                  f"err={np.linalg.norm(pos_e):.4f}")
+            t = step * env.CTRL_TIMESTEP
+            pos = env.pos[0]
+            error = np.linalg.norm(pos_e)
+
+            print(
+                f"  t={t:5.1f}s | "
+                f"pos=[{pos[0]:+.3f}, {pos[1]:+.3f}, {pos[2]:+.3f}] | "
+                f"err={error:.4f}"
+            )
 
         if terminated:
             print("  TERMINATED (crash)")
@@ -60,7 +68,7 @@ def pid_hover():
     logger.save_to_csv("pid_hover")
     env.close()
     print(f"  Final position: {env.pos[0]}")
-    print(f"  Height error: {abs(env.pos[0,2] - 1.0):.4f} m")
+    print(f"  Height error: {abs(env.pos[0, 2] - 1.0):.4f} m")
     print()
 
 
@@ -156,20 +164,30 @@ def multi_drone_pid():
                 cur_ang_vel=env.ang_v[i],
                 target_pos=targets[i],
             )
-            logger.log(i, step * env.CTRL_TIMESTEP, env._getDroneStateVector(i), rpms[i])
+            logger.log(
+                i, step * env.CTRL_TIMESTEP, env._getDroneStateVector(i), rpms[i]
+            )
 
         obs, _, terminated, _, _ = env.step(rpms.flatten())
 
         if step % 96 == 0:
-            errors = [np.linalg.norm(env.pos[i] - targets[i]) for i in range(num_drones)]
-            print(f"  t={step * env.CTRL_TIMESTEP:5.1f}s | errors: {[f'{e:.3f}' for e in errors]}")
+            errors = [
+                np.linalg.norm(env.pos[i] - targets[i]) for i in range(num_drones)
+            ]
+
+            formatted_errors = [f"{e:.3f}" for e in errors]
+
+            print(f"  t={step * env.CTRL_TIMESTEP:5.1f}s | errors: {formatted_errors}")
 
         if terminated:
             break
 
     logger.save_to_csv("multi_pid")
     env.close()
-    print(f"  Final errors: {[f'{np.linalg.norm(env.pos[i] - targets[i]):.4f}' for i in range(num_drones)]}")
+    final_errors = [
+        f"{np.linalg.norm(env.pos[i] - targets[i]):.4f}" for i in range(num_drones)
+    ]
+    print(f"  Final errors: {final_errors}")
     print()
 
 

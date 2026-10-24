@@ -15,6 +15,7 @@ Run:
 """
 
 import os
+
 os.environ.setdefault("MUJOCO_GL", "egl")
 
 import argparse
@@ -25,14 +26,20 @@ from pathlib import Path
 import numpy as np
 
 from multi_drone_mujoco.bench._common import (
-    DEFAULT_ENV, GPUSampler, cpu_count, gpu_info, host_rss_mb,
-    make_env_factory, resolve_env_class, timing_summary,
+    DEFAULT_ENV,
+    GPUSampler,
+    cpu_count,
+    gpu_info,
+    host_rss_mb,
+    make_env_factory,
+    resolve_env_class,
+    timing_summary,
 )
-
 
 # --------------------------------------------------------------------------
 # Part 1 — single-env microbenchmark
 # --------------------------------------------------------------------------
+
 
 def microbench(env_spec: str, n_frames: int = 500, warmup: int = 50) -> dict:
     """Time physics and each render pass separately, in one process."""
@@ -75,10 +82,13 @@ def microbench(env_spec: str, n_frames: int = 500, warmup: int = 50) -> dict:
         r.disable_segmentation_rendering()
 
     def all_three():
-        pass_rgb(); pass_depth(); pass_seg()
+        pass_rgb()
+        pass_depth()
+        pass_seg()
 
     def rgbd_two_updates():
-        pass_rgb(); pass_depth()
+        pass_rgb()
+        pass_depth()
 
     def rgbd_one_update():
         # Same pixels, update_scene issued once. If this is materially faster,
@@ -115,13 +125,20 @@ def microbench(env_spec: str, n_frames: int = 500, warmup: int = 50) -> dict:
     results["full_env_step"] = timing_summary(ts)
 
     results["single_renderer_rgbd_fps"] = round(
-        1000.0 / results["rgbd_two_update_scene"]["mean_ms"], 1)
+        1000.0 / results["rgbd_two_update_scene"]["mean_ms"], 1
+    )
     results["seg_share_of_render_pct"] = round(
-        100.0 * results["seg"]["mean_ms"] / results["all_three"]["mean_ms"], 1)
+        100.0 * results["seg"]["mean_ms"] / results["all_three"]["mean_ms"], 1
+    )
     results["update_scene_saving_pct"] = round(
-        100.0 * (results["rgbd_two_update_scene"]["mean_ms"]
-                 - results["rgbd_one_update_scene"]["mean_ms"])
-        / max(results["rgbd_two_update_scene"]["mean_ms"], 1e-9), 1)
+        100.0
+        * (
+            results["rgbd_two_update_scene"]["mean_ms"]
+            - results["rgbd_one_update_scene"]["mean_ms"]
+        )
+        / max(results["rgbd_two_update_scene"]["mean_ms"], 1e-9),
+        1,
+    )
 
     env.close()
     return results
@@ -130,6 +147,7 @@ def microbench(env_spec: str, n_frames: int = 500, warmup: int = 50) -> dict:
 # --------------------------------------------------------------------------
 # Part 2 — scaling sweep
 # --------------------------------------------------------------------------
+
 
 def sweep_one(env_spec: str, n_envs: int, steps: int, warmup: int) -> dict:
     """Aggregate throughput for a given env count, via SubprocVecEnv.
@@ -174,9 +192,11 @@ def sweep_one(env_spec: str, n_envs: int, steps: int, warmup: int) -> dict:
 # Reporting
 # --------------------------------------------------------------------------
 
+
 def plot(report: dict, png_path: Path):
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except Exception:
@@ -214,14 +234,20 @@ def plot(report: dict, png_path: Path):
     micro = report.get("micro")
     if micro:
         labels = ["mj_step", "rgb", "depth", "seg"]
-        vals = [micro["mj_step"]["mean_ms"], micro["rgb"]["mean_ms"],
-                micro["depth"]["mean_ms"], micro["seg"]["mean_ms"]]
-        axes[2].bar(labels, vals,
-                    color=["tab:green", "tab:blue", "tab:cyan", "tab:orange"])
+        vals = [
+            micro["mj_step"]["mean_ms"],
+            micro["rgb"]["mean_ms"],
+            micro["depth"]["mean_ms"],
+            micro["seg"]["mean_ms"],
+        ]
+        axes[2].bar(
+            labels, vals, color=["tab:green", "tab:blue", "tab:cyan", "tab:orange"]
+        )
         axes[2].set_ylabel("ms / call")
         axes[2].set_title(
             f"Per-call cost @ {micro['img_w']}x{micro['img_h']}\n"
-            f"seg = {micro['seg_share_of_render_pct']}% of render, discarded")
+            f"seg = {micro['seg_share_of_render_pct']}% of render, discarded"
+        )
         axes[2].grid(alpha=0.3, axis="y")
     else:
         axes[2].text(0.5, 0.5, "microbench skipped", ha="center", va="center")
@@ -232,11 +258,13 @@ def plot(report: dict, png_path: Path):
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--env", default=DEFAULT_ENV)
-    p.add_argument("--envs", default="1,2,4,8,16,30",
-                   help="comma-separated env counts to sweep")
+    p.add_argument(
+        "--envs", default="1,2,4,8,16,30", help="comma-separated env counts to sweep"
+    )
     p.add_argument("--steps", type=int, default=300)
     p.add_argument("--warmup", type=int, default=30)
     p.add_argument("--micro-frames", type=int, default=500)
@@ -259,15 +287,21 @@ def main():
         print("[1/2] single-env microbenchmark ...")
         m = microbench(args.env, n_frames=args.micro_frames)
         report["micro"] = m
-        print(f"      {m['img_w']}x{m['img_h']}   "
-              f"mj_step {m['mj_step']['mean_ms']}ms   "
-              f"rgb {m['rgb']['mean_ms']}ms   "
-              f"depth {m['depth']['mean_ms']}ms   "
-              f"seg {m['seg']['mean_ms']}ms")
-        print(f"      segmentation = {m['seg_share_of_render_pct']}% of render "
-              f"time, and is discarded by the RL obs")
-        print(f"      dropping the redundant update_scene would save "
-              f"{m['update_scene_saving_pct']}% of RGB-D time")
+        print(
+            f"      {m['img_w']}x{m['img_h']}   "
+            f"mj_step {m['mj_step']['mean_ms']}ms   "
+            f"rgb {m['rgb']['mean_ms']}ms   "
+            f"depth {m['depth']['mean_ms']}ms   "
+            f"seg {m['seg']['mean_ms']}ms"
+        )
+        print(
+            f"      segmentation = {m['seg_share_of_render_pct']}% of render "
+            f"time, and is discarded by the RL obs"
+        )
+        print(
+            f"      dropping the redundant update_scene would save "
+            f"{m['update_scene_saving_pct']}% of RGB-D time"
+        )
         print(f"      one renderer sustains {m['single_renderer_rgbd_fps']} RGB-D fps")
 
     print("[2/2] scaling sweep ...")
@@ -276,10 +310,12 @@ def main():
         print(f"      n_envs={n:>3} ...", end="", flush=True)
         row = sweep_one(args.env, n, args.steps, args.warmup)
         report["sweep"].append(row)
-        print(f" {row['env_steps_per_sec']:>8} env-steps/s"
-              f"  VRAM {row['vram_peak_mb']} MB"
-              f"  RSS {row['host_rss_mb']} MB"
-              f"  p99 {row['vec_step']['p99_ms']} ms")
+        print(
+            f" {row['env_steps_per_sec']:>8} env-steps/s"
+            f"  VRAM {row['vram_peak_mb']} MB"
+            f"  RSS {row['host_rss_mb']} MB"
+            f"  p99 {row['vec_step']['p99_ms']} ms"
+        )
 
     json_path = out.with_suffix(".json")
     json_path.write_text(json.dumps(report, indent=2))

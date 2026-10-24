@@ -7,7 +7,12 @@ import numpy as np
 from gymnasium import spaces
 
 from multi_drone_mujoco.envs.base_aviary import BaseAviary
-from multi_drone_mujoco.utils.enums import DroneModel, Physics, ActionType, ObservationType
+from multi_drone_mujoco.utils.enums import (
+    ActionType,
+    DroneModel,
+    ObservationType,
+    Physics,
+)
 
 
 class RaceAviary(BaseAviary):
@@ -32,14 +37,16 @@ class RaceAviary(BaseAviary):
 
         if gates is None:
             # Oval racing circuit
-            self.GATES = np.array([
-                [1.0, 0.0, 1.0],
-                [2.0, 1.0, 1.2],
-                [1.0, 2.0, 1.5],
-                [0.0, 2.0, 1.3],
-                [-1.0, 1.0, 1.0],
-                [0.0, 0.0, 0.8],
-            ])
+            self.GATES = np.array(
+                [
+                    [1.0, 0.0, 1.0],
+                    [2.0, 1.0, 1.2],
+                    [1.0, 2.0, 1.5],
+                    [0.0, 2.0, 1.3],
+                    [-1.0, 1.0, 1.0],
+                    [0.0, 0.0, 0.8],
+                ]
+            )
         else:
             self.GATES = np.array(gates)
 
@@ -75,8 +82,11 @@ class RaceAviary(BaseAviary):
         )
 
     def _observationSpace(self):
-        # pos(3) + rpy(3) + vel(3) + angvel(3) + next_gate(3) + rel_gate(3) + gate_after(3) = 21
-        return spaces.Box(low=-np.inf, high=np.inf, shape=(21 * self.NUM_DRONES,), dtype=np.float32)
+        """Per-drone: pos(3) + rpy(3) + vel(3) + angvel(3) +
+        next_gate(3) + rel_gate(3) + gate_after(3) = 21"""
+        return spaces.Box(
+            low=-np.inf, high=np.inf, shape=(21 * self.NUM_DRONES,), dtype=np.float32
+        )
 
     def _preprocessAction(self, action):
         action = np.clip(np.array(action).reshape(self.NUM_DRONES, 4), -1, 1)
@@ -93,10 +103,19 @@ class RaceAviary(BaseAviary):
             next_gate = self.GATES[gate_idx]
             gate_after = self.GATES[(gate_idx + 1) % len(self.GATES)]
             rel_gate = next_gate - self.pos[i]
-            obs_list.append(np.hstack([
-                state[0:3], state[7:10], state[10:13], state[13:16],
-                next_gate, rel_gate, gate_after,
-            ]))
+            obs_list.append(
+                np.hstack(
+                    [
+                        state[0:3],
+                        state[7:10],
+                        state[10:13],
+                        state[13:16],
+                        next_gate,
+                        rel_gate,
+                        gate_after,
+                    ]
+                )
+            )
         return np.concatenate(obs_list).astype(np.float32)
 
     def _computeReward(self):
@@ -129,7 +148,9 @@ class RaceAviary(BaseAviary):
         for i in range(self.NUM_DRONES):
             if self.pos[i, 2] < 0.0:
                 return True
-            if abs(self.rpy[i, 0]) > 2.0 or abs(self.rpy[i, 1]) > 2.0:  # More lenient for racing
+            if (
+                abs(self.rpy[i, 0]) > 2.0 or abs(self.rpy[i, 1]) > 2.0
+            ):  # More lenient for racing
                 return True
         return False
 

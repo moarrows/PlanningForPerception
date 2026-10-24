@@ -1,11 +1,11 @@
 """Example: Play/visualize a trained policy.
 
 Usage:
-    python -m multi_drone_mujoco.examples.play --model_path results/rl_hover/best_model.zip
+    python -m multi_drone_mujoco.examples.play
+        --model_path results/rl_hover/best_model.zip
 """
 
 import argparse
-import numpy as np
 
 
 def play(model_path: str, env_type: str = "hover", episodes: int = 3):
@@ -23,7 +23,9 @@ def play(model_path: str, env_type: str = "hover", episodes: int = 3):
     model = PPO.load(model_path)
 
     if env_type == "multi":
-        env = MultiHoverAviary(num_drones=2, ctrl_freq=48, sim_freq=240, render_mode="rgb_array")
+        env = MultiHoverAviary(
+            num_drones=2, ctrl_freq=48, sim_freq=240, render_mode="rgb_array"
+        )
     else:
         env = HoverAviary(ctrl_freq=48, sim_freq=240, render_mode="rgb_array")
 

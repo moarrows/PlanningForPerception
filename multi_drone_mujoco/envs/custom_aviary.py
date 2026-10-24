@@ -3,12 +3,15 @@
 Task: fly through a sequence of waypoints as quickly as possible.
 """
 
-import mujoco
 import numpy as np
-from gymnasium import spaces
 
 from multi_drone_mujoco.envs.base_aviary import BaseAviary
-from multi_drone_mujoco.utils.enums import DroneModel, Physics, ActionType, ObservationType
+from multi_drone_mujoco.utils.enums import (
+    ActionType,
+    DroneModel,
+    ObservationType,
+    Physics,
+)
 
 
 class CustomAviary(BaseAviary):
@@ -32,17 +35,21 @@ class CustomAviary(BaseAviary):
         self.WAYPOINT_RADIUS = waypoint_radius
 
         if waypoints is None:
-            self.WAYPOINTS = np.array([
-                [0.0, 0.0, 1.0],
-                [1.0, 0.0, 1.0],
-                [1.0, 1.0, 1.5],
-                [0.0, 1.0, 1.0],
-                [0.0, 0.0, 0.5],
-            ])
+            self.WAYPOINTS = np.array(
+                [
+                    [0.0, 0.0, 1.0],
+                    [1.0, 0.0, 1.0],
+                    [1.0, 1.0, 1.5],
+                    [0.0, 1.0, 1.0],
+                    [0.0, 0.0, 0.5],
+                ]
+            )
         else:
             self.WAYPOINTS = np.array(waypoints)
 
-        self.current_waypoint_idx = np.zeros(num_drones if num_drones > 1 else 1, dtype=int)
+        self.current_waypoint_idx = np.zeros(
+            num_drones if num_drones > 1 else 1, dtype=int
+        )
 
         if initial_xyzs is None:
             initial_xyzs = np.array([[0.0, 0.0, 0.1]])
@@ -60,7 +67,7 @@ class CustomAviary(BaseAviary):
             initial_xyzs=initial_xyzs,
             render_mode=render_mode,
             vision_attributes=True,
-            gimbal_control=True
+            gimbal_control=True,
         )
 
     def reset(self, seed=None, options=None):
@@ -75,7 +82,9 @@ class CustomAviary(BaseAviary):
             dist = np.linalg.norm(self.pos[i] - wp)
 
             # Check waypoint reached
-            if dist < self.WAYPOINT_RADIUS and self.current_waypoint_idx[i] < len(self.WAYPOINTS):
+            if dist < self.WAYPOINT_RADIUS and self.current_waypoint_idx[i] < len(
+                self.WAYPOINTS
+            ):
                 self.current_waypoint_idx[i] += 1
                 total += 10.0  # Big bonus for reaching waypoint
 
@@ -116,9 +125,7 @@ class CustomAviary(BaseAviary):
             amplitude = 0.5
             frequency = 0.2
 
-            self.data.ctrl[actuator_id] = (
-                amplitude * np.sin(2 * np.pi * frequency * t)
-            )
+            self.data.ctrl[actuator_id] = amplitude * np.sin(2 * np.pi * frequency * t)
 
         # Let BaseAviary do the normal simulation step
         return super().step(action)

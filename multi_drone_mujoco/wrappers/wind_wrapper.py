@@ -3,11 +3,11 @@
 Wraps a BaseAviary and injects wind disturbance forces at each physics step.
 """
 
-import numpy as np
-import gymnasium as gym
 from typing import Optional
 
-from multi_drone_mujoco.wrappers.wind import WindField, WindConfig, WindModel
+import gymnasium as gym
+
+from multi_drone_mujoco.wrappers.wind import WindConfig, WindField, WindModel
 
 
 class WindWrapper(gym.Wrapper):
@@ -56,10 +56,10 @@ class WindWrapper(gym.Wrapper):
         # the environment steps (accumulated over the control timestep).
         base_env = self.env
         # Access the unwrapped base aviary
-        while hasattr(base_env, 'env') and not hasattr(base_env, 'data'):
+        while hasattr(base_env, "env") and not hasattr(base_env, "data"):
             base_env = base_env.env
 
-        if hasattr(base_env, 'data') and hasattr(base_env, 'NUM_DRONES'):
+        if hasattr(base_env, "data") and hasattr(base_env, "NUM_DRONES"):
             # Apply wind force to each drone
             for i in range(base_env.NUM_DRONES):
                 body_name = f"drone{i}"

@@ -7,7 +7,12 @@ import numpy as np
 from gymnasium import spaces
 
 from multi_drone_mujoco.envs.base_aviary import BaseAviary
-from multi_drone_mujoco.utils.enums import DroneModel, Physics, ActionType, ObservationType
+from multi_drone_mujoco.utils.enums import (
+    ActionType,
+    DroneModel,
+    ObservationType,
+    Physics,
+)
 
 
 class VelocityAviary(BaseAviary):
@@ -53,7 +58,9 @@ class VelocityAviary(BaseAviary):
         return obs, info
 
     def _actionSpace(self):
-        return spaces.Box(low=-np.ones(4, dtype=np.float32), high=np.ones(4, dtype=np.float32))
+        return spaces.Box(
+            low=-np.ones(4, dtype=np.float32), high=np.ones(4, dtype=np.float32)
+        )
 
     def _observationSpace(self):
         # State (12) + target velocity (4) = 16
@@ -65,7 +72,9 @@ class VelocityAviary(BaseAviary):
 
     def _computeObs(self):
         state = self._getDroneStateVector(0)
-        obs = np.hstack([state[0:3], state[7:10], state[10:13], state[13:16], self.TARGET_VEL])
+        obs = np.hstack(
+            [state[0:3], state[7:10], state[10:13], state[13:16], self.TARGET_VEL]
+        )
         return obs.astype(np.float32)
 
     def _computeReward(self):
@@ -77,10 +86,10 @@ class VelocityAviary(BaseAviary):
         # Bonus for tracking
         if vel_error < 0.05:
             reward += 0.5
-            
+
         if self._computeTerminated():
             reward -= 100.0
-            
+
         return float(reward)
 
     def _computeTerminated(self):

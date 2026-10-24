@@ -7,19 +7,18 @@ Usage:
 
 import argparse
 import os
-from pathlib import Path
-
-import numpy as np
 
 
 def train_single(total_timesteps: int = 100_000, output_dir: str = "results/rl_hover"):
     """Train single-drone hover with PPO."""
     try:
         from stable_baselines3 import PPO
-        from stable_baselines3.common.env_util import make_vec_env
         from stable_baselines3.common.callbacks import EvalCallback
+        from stable_baselines3.common.env_util import make_vec_env
     except ImportError:
-        print("[ERROR] stable-baselines3 not installed. Run: pip install stable-baselines3")
+        print(
+            "[ERROR] stable-baselines3 not installed.Run: pip install stable-baselines3"
+        )
         return
 
     from multi_drone_mujoco.envs.hover_aviary import HoverAviary
@@ -70,14 +69,18 @@ def train_single(total_timesteps: int = 100_000, output_dir: str = "results/rl_h
     eval_env.close()
 
 
-def train_multi(total_timesteps: int = 200_000, output_dir: str = "results/rl_multi_hover"):
+def train_multi(
+    total_timesteps: int = 200_000, output_dir: str = "results/rl_multi_hover"
+):
     """Train multi-drone hover with PPO (centralized)."""
     try:
         from stable_baselines3 import PPO
-        from stable_baselines3.common.env_util import make_vec_env
         from stable_baselines3.common.callbacks import EvalCallback
+        from stable_baselines3.common.env_util import make_vec_env
     except ImportError:
-        print("[ERROR] stable-baselines3 not installed. Run: pip install stable-baselines3")
+        print(
+            "[ERROR] stable-baselines3 not installed.Run: pip install stable-baselines3"
+        )
         return
 
     from multi_drone_mujoco.envs.multi_hover_aviary import MultiHoverAviary

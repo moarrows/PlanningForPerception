@@ -7,7 +7,12 @@ import numpy as np
 from gymnasium import spaces
 
 from multi_drone_mujoco.envs.base_aviary import BaseAviary
-from multi_drone_mujoco.utils.enums import DroneModel, Physics, ActionType, ObservationType
+from multi_drone_mujoco.utils.enums import (
+    ActionType,
+    DroneModel,
+    ObservationType,
+    Physics,
+)
 
 
 class MultiHoverAviary(BaseAviary):
@@ -62,7 +67,8 @@ class MultiHoverAviary(BaseAviary):
         )
 
     def _observationSpace(self):
-        """Per-drone: pos(3) + rpy(3) + vel(3) + angvel(3) + target_h(1) = 13 per drone."""
+        """Per-drone: pos(3) + rpy(3) + vel(3) + angvel(3)
+        + target_h(1) = 13 per drone."""
         return spaces.Box(
             low=-np.inf,
             high=np.inf,
@@ -81,10 +87,15 @@ class MultiHoverAviary(BaseAviary):
         obs_list = []
         for i in range(self.NUM_DRONES):
             state = self._getDroneStateVector(i)
-            drone_obs = np.hstack([
-                state[0:3], state[7:10], state[10:13], state[13:16],
-                [self.TARGET_HEIGHTS[i]],
-            ])
+            drone_obs = np.hstack(
+                [
+                    state[0:3],
+                    state[7:10],
+                    state[10:13],
+                    state[13:16],
+                    [self.TARGET_HEIGHTS[i]],
+                ]
+            )
             obs_list.append(drone_obs)
         return np.concatenate(obs_list).astype(np.float32)
 
@@ -97,10 +108,10 @@ class MultiHoverAviary(BaseAviary):
             total -= 0.05 * (abs(self.rpy[i, 0]) + abs(self.rpy[i, 1]))
             if height_err < 0.05:
                 total += 0.5
-                
+
         if self._computeTerminated():
             total -= 100.0
-            
+
         return float(total)
 
     def _computeTerminated(self):

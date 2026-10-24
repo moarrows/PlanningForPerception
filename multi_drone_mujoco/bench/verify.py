@@ -32,6 +32,7 @@ Run:
 """
 
 import os
+
 os.environ.setdefault("MUJOCO_GL", "egl")
 
 import argparse
@@ -95,10 +96,12 @@ def measure_noise_floor(env, renderer, n: int = 8) -> dict:
     floors["shared_renderer"] = {"rgb": rgb_max, "depth": dep_max}
 
     env._external_renderer = saved
-    floors["rgb"] = max(floors["per_env_renderer"]["rgb"],
-                        floors["shared_renderer"]["rgb"])
-    floors["depth"] = max(floors["per_env_renderer"]["depth"],
-                          floors["shared_renderer"]["depth"])
+    floors["rgb"] = max(
+        floors["per_env_renderer"]["rgb"], floors["shared_renderer"]["rgb"]
+    )
+    floors["depth"] = max(
+        floors["per_env_renderer"]["depth"], floors["shared_renderer"]["depth"]
+    )
     return floors
 
 
@@ -121,27 +124,42 @@ def _diagnose(base_env, shared_env, renderer) -> dict:
         "geom_xpos": _maxdiff(s.geom_xpos, scratch.geom_xpos),
         "geom_xmat": _maxdiff(s.geom_xmat, scratch.geom_xmat),
         "light_xpos": _maxdiff(s.light_xpos, scratch.light_xpos)
-                      if renderer.model.nlight else 0.0,
+        if renderer.model.nlight
+        else 0.0,
     }
 
     if max(physics.values()) > 0:
-        verdict = ("A: the two envs' physics already diverged — the comparison "
-                   "is invalid, fix the test setup before blaming the renderer")
+        verdict = (
+            "A: the two envs' physics already diverged — the comparison "
+            "is invalid, fix the test setup before blaming the renderer"
+        )
     elif max(transfer.values()) > 0:
         worst = max(transfer, key=transfer.get)
-        verdict = (f"B: env state did not reach the renderer intact "
-                   f"(worst field: {worst} = {transfer[worst]:.6g}) — the "
-                   f"state-transfer step is incomplete")
+        verdict = (
+            f"B: env state did not reach the renderer intact "
+            f"(worst field: {worst} = {transfer[worst]:.6g}) — the "
+            f"state-transfer step is incomplete"
+        )
     else:
-        verdict = ("C: identical state, different pixels — a renderer "
-                   "configuration difference (scene options / lighting / "
-                   "buffer setup), not a state problem")
+        verdict = (
+            "C: identical state, different pixels — a renderer "
+            "configuration difference (scene options / lighting / "
+            "buffer setup), not a state problem"
+        )
 
     return {"physics": physics, "transfer": transfer, "verdict": verdict}
 
 
-def run_check(env_cls, k: int, steps: int, seed: int, shuffle: bool,
-              want_seg: bool, state_transfer: str, rgb_tol: int) -> dict:
+def run_check(
+    env_cls,
+    k: int,
+    steps: int,
+    seed: int,
+    shuffle: bool,
+    want_seg: bool,
+    state_transfer: str,
+    rgb_tol: int,
+) -> dict:
     base_envs = [env_cls(seed=seed + i) for i in range(k)]
     shared_envs = [env_cls(seed=seed + i) for i in range(k)]
 
@@ -152,8 +170,11 @@ def run_check(env_cls, k: int, steps: int, seed: int, shuffle: bool,
 
     head = shared_envs[0]
     renderer = SharedStaticRenderer(
-        head.model, width=int(head.IMG_RES[0]), height=int(head.IMG_RES[1]),
-        want_seg=want_seg, state_transfer=state_transfer,
+        head.model,
+        width=int(head.IMG_RES[0]),
+        height=int(head.IMG_RES[1]),
+        want_seg=want_seg,
+        state_transfer=state_transfer,
     )
     for e in shared_envs:
         renderer.assert_compatible(e.model, "drone0_cam")
@@ -177,8 +198,12 @@ def run_check(env_cls, k: int, steps: int, seed: int, shuffle: bool,
 
     try:
         for _ in range(steps):
-            actions = [rng.uniform(-1, 1, size=base_envs[0].action_space.shape
-                                   ).astype(np.float32) for _ in range(k)]
+            actions = [
+                rng.uniform(-1, 1, size=base_envs[0].action_space.shape).astype(
+                    np.float32
+                )
+                for _ in range(k)
+            ]
             for e, a in zip(base_envs, actions):
                 e.step(a)
             for e, a in zip(shared_envs, actions):
@@ -193,8 +218,11 @@ def run_check(env_cls, k: int, steps: int, seed: int, shuffle: bool,
                 # Shared first, so the scratch data still describes this env
                 # if we need to diagnose.
                 s_rgb, s_dep, _ = shared_envs[i]._getDroneImages(0)
-                snapshot = (_diagnose(base_envs[i], shared_envs[i], renderer)
-                            if diagnosis is None else None)
+                snapshot = (
+                    _diagnose(base_envs[i], shared_envs[i], renderer)
+                    if diagnosis is None
+                    else None
+                )
                 b_rgb, b_dep, _ = base_envs[i]._getDroneImages(0)
 
                 stats = _rgb_stats(b_rgb, s_rgb)
@@ -244,60 +272,87 @@ def run_check(env_cls, k: int, steps: int, seed: int, shuffle: bool,
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--env", default=DEFAULT_ENV)
     p.add_argument("--envs", type=int, default=4, help="envs sharing one renderer")
     p.add_argument("--steps", type=int, default=60)
     p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--seg", action="store_true",
-                   help="also render and compare the segmentation pass")
-    p.add_argument("--state-transfer", default="copy",
-                   choices=SharedStaticRenderer.STATE_TRANSFER_MODES,
-                   help="'copy' transfers the whole MjData (exact); 'minimal' "
-                        "copies qpos and recomputes poses (faster, must be "
-                        "proven here before use)")
-    p.add_argument("--rgb-tol", type=int, default=1,
-                   help="allowed RGB LSB difference. The gate is the larger of "
-                        "this and the measured repeatability floor. Depth is "
-                        "always required to match exactly.")
+    p.add_argument(
+        "--seg",
+        action="store_true",
+        help="also render and compare the segmentation pass",
+    )
+    p.add_argument(
+        "--state-transfer",
+        default="copy",
+        choices=SharedStaticRenderer.STATE_TRANSFER_MODES,
+        help="'copy' transfers the whole MjData (exact); 'minimal' "
+        "copies qpos and recomputes poses (faster, must be "
+        "proven here before use)",
+    )
+    p.add_argument(
+        "--rgb-tol",
+        type=int,
+        default=1,
+        help="allowed RGB LSB difference. The gate is the larger of "
+        "this and the measured repeatability floor. Depth is "
+        "always required to match exactly.",
+    )
     args = p.parse_args()
 
     env_cls = resolve_env_class(args.env)
 
-    print(f"env={args.env}  k={args.envs}  steps={args.steps}  "
-          f"seg={args.seg}  state_transfer={args.state_transfer}\n")
+    print(
+        f"env={args.env}  k={args.envs}  steps={args.steps}  "
+        f"seg={args.seg}  state_transfer={args.state_transfer}\n"
+    )
 
     results = []
     for shuffle in (False, True):
         name = "cross-talk (shuffled order)" if shuffle else "parity (in order)"
         print(f"[{name}] ...", end="", flush=True)
-        r = run_check(env_cls, args.envs, args.steps, args.seed, shuffle,
-                      args.seg, args.state_transfer, args.rgb_tol)
+        r = run_check(
+            env_cls,
+            args.envs,
+            args.steps,
+            args.seed,
+            shuffle,
+            args.seg,
+            args.state_transfer,
+            args.rgb_tol,
+        )
         results.append((name, r))
         st = r["rgb_worst_frame_stats"]
-        print(f" {'PASS' if r['passed'] else 'FAIL'}"
-              f"  rgb_max={r['max_rgb_abs_diff']} (gate {r['rgb_gate']},"
-              f" {st['frac_differing'] * 100:.3f}% of pixels differ,"
-              f" mean {st['mean']:.4f})"
-              f"  depth_max={r['max_depth_abs_diff']:.6g}"
-              f"  ({r['frames_compared']} frames)")
+        print(
+            f" {'PASS' if r['passed'] else 'FAIL'}"
+            f"  rgb_max={r['max_rgb_abs_diff']} (gate {r['rgb_gate']},"
+            f" {st['frac_differing'] * 100:.3f}% of pixels differ,"
+            f" mean {st['mean']:.4f})"
+            f"  depth_max={r['max_depth_abs_diff']:.6g}"
+            f"  ({r['frames_compared']} frames)"
+        )
 
     print()
     if all(r["passed"] for _, r in results):
         first = results[0][1]
         nf = first["noise_floor"]
-        print(f"measured repeatability floor on this GPU: "
-              f"per-env renderer rgb={nf['per_env_renderer']['rgb']:.6g}, "
-              f"shared renderer rgb={nf['shared_renderer']['rgb']:.6g} "
-              f"(same state rendered repeatedly)")
+        print(
+            f"measured repeatability floor on this GPU: "
+            f"per-env renderer rgb={nf['per_env_renderer']['rgb']:.6g}, "
+            f"shared renderer rgb={nf['shared_renderer']['rgb']:.6g} "
+            f"(same state rendered repeatedly)"
+        )
         if all(r["bit_identical"] for _, r in results):
             print("ALL CHECKS PASSED — shared renderer is bit-identical.")
         else:
-            print("ALL CHECKS PASSED — depth exact (geometry and camera pose "
-                  "provably correct); RGB differs only within the measured\n"
-                  "floor, i.e. colour quantisation between independent GL "
-                  "contexts, not an env/image association fault.")
+            print(
+                "ALL CHECKS PASSED — depth exact (geometry and camera pose "
+                "provably correct); RGB differs only within the measured\n"
+                "floor, i.e. colour quantisation between independent GL "
+                "contexts, not an env/image association fault."
+            )
         return 0
 
     print("FAILED — do not trust any speed comparison until this passes.\n")
@@ -305,19 +360,27 @@ def main():
         d = r.get("diagnosis")
         if not d:
             continue
-        print(f"--- first divergence in '{name}' (env {d['env_index']}, "
-              f"rgb {d['rgb_diff']}, depth {d['depth_diff']:.6g}) ---")
-        print(f"  physics  base vs shared : "
-              + ", ".join(f"{k}={v:.6g}" for k, v in d["physics"].items()))
-        print(f"  transfer env vs scratch : "
-              + ", ".join(f"{k}={v:.6g}" for k, v in d["transfer"].items()))
+        print(
+            f"--- first divergence in '{name}' (env {d['env_index']}, "
+            f"rgb {d['rgb_diff']}, depth {d['depth_diff']:.6g}) ---"
+        )
+        print(
+            "  physics  base vs shared : "
+            + ", ".join(f"{k}={v:.6g}" for k, v in d["physics"].items())
+        )
+        print(
+            "  transfer env vs scratch : "
+            + ", ".join(f"{k}={v:.6g}" for k, v in d["transfer"].items())
+        )
         print(f"  => {d['verdict']}")
         print()
         break
 
     if args.state_transfer == "minimal":
-        print("Re-run with --state-transfer copy: if that passes, 'minimal' is "
-              "missing a field that the scene builder reads.")
+        print(
+            "Re-run with --state-transfer copy: if that passes, 'minimal' is "
+            "missing a field that the scene builder reads."
+        )
     return 1
 
 

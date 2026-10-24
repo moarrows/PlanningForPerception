@@ -27,15 +27,17 @@ range as that arena's.
 
 from __future__ import annotations
 
-import numpy as np
-import gymnasium as gym
-from gymnasium import spaces
 import mujoco
+import numpy as np
+from gymnasium import spaces
 
 from multi_drone_mujoco.envs import base_aviary as _BA
 from multi_drone_mujoco.envs.base_aviary import BaseAviary
 from multi_drone_mujoco.utils.enums import (
-    DroneModel, Physics, ActionType, ObservationType,
+    ActionType,
+    DroneModel,
+    ObservationType,
+    Physics,
 )
 
 
@@ -48,13 +50,15 @@ def _clutter_xml(n: int, seed: int = 0) -> tuple:
     assets, bodies = [], []
     for i in range(n):
         # Deterministic spread on a spiral, well clear of the drone's spawn.
-        ang = 2.399963 * i           # golden angle, gives an even spread
+        ang = 2.399963 * i  # golden angle, gives an even spread
         rad = 1.2 + 0.35 * (i % 7)
         x, y = rad * np.cos(ang), rad * np.sin(ang)
         z = 0.25 + 0.30 * (i % 5)
-        r, g, b = 0.25 + 0.5 * ((i * 7) % 5) / 4.0, \
-                  0.25 + 0.5 * ((i * 3) % 4) / 3.0, \
-                  0.25 + 0.5 * ((i * 5) % 6) / 5.0
+        r, g, b = (
+            0.25 + 0.5 * ((i * 7) % 5) / 4.0,
+            0.25 + 0.5 * ((i * 3) % 4) / 3.0,
+            0.25 + 0.5 * ((i * 5) % 6) / 5.0,
+        )
         kind = "checker" if i % 2 == 0 else "gradient"
         assets.append(
             f'    <texture name="bench_tex_{i}" type="2d" builtin="{kind}" '
@@ -67,7 +71,7 @@ def _clutter_xml(n: int, seed: int = 0) -> tuple:
             f'    <body name="bench_clutter_{i}" pos="{x:.4f} {y:.4f} {z:.4f}">\n'
             f'      <geom type="box" size="0.12 0.12 {0.15 + 0.05 * (i % 4):.3f}" '
             f'material="bench_mat_{i}" contype="0" conaffinity="0"/>\n'
-            f'    </body>'
+            f"    </body>"
         )
     return "\n".join(assets), "\n".join(bodies)
 
@@ -116,14 +120,21 @@ class BenchAviary(BaseAviary):
 
     IMG_W, IMG_H = 96, 96
 
-    def __init__(self, img_w: int = 96, img_h: int = 96, n_clutter: int = 24,
-                 depth_max: float = 8.0, seed: int = None,
-                 sim_freq: int = 240, ctrl_freq: int = 48):
+    def __init__(
+        self,
+        img_w: int = 96,
+        img_h: int = 96,
+        n_clutter: int = 24,
+        depth_max: float = 8.0,
+        seed: int = None,
+        sim_freq: int = 240,
+        ctrl_freq: int = 48,
+    ):
         self.IMG_W, self.IMG_H = int(img_w), int(img_h)
         self.DEPTH_MAX = float(depth_max)
         self.N_CLUTTER = int(n_clutter)
         self._rng = np.random.default_rng(seed)
-        self.EPISODE_LEN_SEC = 30      # long, so resets don't dominate timings
+        self.EPISODE_LEN_SEC = 30  # long, so resets don't dominate timings
 
         original, patched = _make_injector(self.N_CLUTTER)
         _BA._generate_aviary_xml = patched
@@ -134,7 +145,8 @@ class BenchAviary(BaseAviary):
                 initial_xyzs=np.array([[0.0, 0.0, 1.0]]),
                 initial_rpys=np.array([[0.0, 0.0, 0.0]]),
                 physics=Physics.MJC,
-                sim_freq=sim_freq, ctrl_freq=ctrl_freq,
+                sim_freq=sim_freq,
+                ctrl_freq=ctrl_freq,
                 vision_attributes=True,
                 obs_type=ObservationType.KIN,
                 act_type=ActionType.RPM,
@@ -149,10 +161,14 @@ class BenchAviary(BaseAviary):
     # -- spaces ------------------------------------------------------------
 
     def _observationSpace(self):
-        return spaces.Dict({
-            "image": spaces.Box(0, 255, shape=(self.IMG_H, self.IMG_W, 4), dtype=np.uint8),
-            "proprio": spaces.Box(-np.inf, np.inf, shape=(9,), dtype=np.float32),
-        })
+        return spaces.Dict(
+            {
+                "image": spaces.Box(
+                    0, 255, shape=(self.IMG_H, self.IMG_W, 4), dtype=np.uint8
+                ),
+                "proprio": spaces.Box(-np.inf, np.inf, shape=(9,), dtype=np.float32),
+            }
+        )
 
     def _actionSpace(self):
         return spaces.Box(-1.0, 1.0, shape=(4,), dtype=np.float32)
@@ -172,7 +188,9 @@ class BenchAviary(BaseAviary):
 
     def _computeObs(self):
         rgb, dep, _ = self._getDroneImages(0)
-        depth_u8 = (np.clip(dep, 0.0, self.DEPTH_MAX) / self.DEPTH_MAX * 255.0).astype(np.uint8)
+        depth_u8 = (np.clip(dep, 0.0, self.DEPTH_MAX) / self.DEPTH_MAX * 255.0).astype(
+            np.uint8
+        )
         image = np.concatenate([rgb[..., :3], depth_u8[..., None]], axis=2)
 
         R = np.zeros(9)

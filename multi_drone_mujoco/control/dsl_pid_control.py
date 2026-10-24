@@ -71,7 +71,10 @@ class DSLPIDControl(PIDControl):
             delta_pos = target_pos - self._prev_target_pos
             max_delta = self.MAX_POS_RATE * control_timestep
             if np.linalg.norm(delta_pos) > max_delta:
-                target_pos = self._prev_target_pos + delta_pos / np.linalg.norm(delta_pos) * max_delta
+                target_pos = (
+                    self._prev_target_pos
+                    + delta_pos / np.linalg.norm(delta_pos) * max_delta
+                )
 
         # Rate limit yaw
         if self._prev_target_yaw is not None:
@@ -80,14 +83,20 @@ class DSLPIDControl(PIDControl):
             max_yaw_delta = self.MAX_YAW_RATE * control_timestep
             if abs(delta_yaw) > max_yaw_delta:
                 target_rpy = target_rpy.copy()
-                target_rpy[2] = self._prev_target_yaw + np.sign(delta_yaw) * max_yaw_delta
+                target_rpy[2] = (
+                    self._prev_target_yaw + np.sign(delta_yaw) * max_yaw_delta
+                )
 
         self._prev_target_pos = target_pos.copy()
         self._prev_target_yaw = target_rpy[2]
 
         # Override integral limits
-        self.integral_pos_e = np.clip(self.integral_pos_e, -self.INTEGRAL_POS_LIMIT, self.INTEGRAL_POS_LIMIT)
-        self.integral_rpy_e = np.clip(self.integral_rpy_e, -self.INTEGRAL_RPY_LIMIT, self.INTEGRAL_RPY_LIMIT)
+        self.integral_pos_e = np.clip(
+            self.integral_pos_e, -self.INTEGRAL_POS_LIMIT, self.INTEGRAL_POS_LIMIT
+        )
+        self.integral_rpy_e = np.clip(
+            self.integral_rpy_e, -self.INTEGRAL_RPY_LIMIT, self.INTEGRAL_RPY_LIMIT
+        )
 
         # Call base computation
         rpm, pos_e, yaw_e = super().computeControl(

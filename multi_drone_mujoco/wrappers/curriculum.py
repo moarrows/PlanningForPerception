@@ -4,11 +4,12 @@ Automatically adjusts task difficulty based on agent performance,
 enabling smooth learning from easy to hard tasks.
 """
 
-import numpy as np
-import gymnasium as gym
-from dataclasses import dataclass, field
-from typing import Callable, Optional, Dict, Any
 from collections import deque
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, Optional
+
+import gymnasium as gym
+import numpy as np
 
 
 @dataclass
@@ -32,6 +33,7 @@ class CurriculumConfig:
     advance_count : int
         Must exceed threshold for this many consecutive windows to advance.
     """
+
     metric: str = "success_rate"
     threshold_advance: float = 0.8
     threshold_retreat: float = 0.2
@@ -140,7 +142,9 @@ class CurriculumWrapper(gym.Wrapper):
         if avg >= self.config.threshold_advance:
             self._advance_streak += 1
             if self._advance_streak >= self.config.advance_count:
-                self.current_level = min(self.current_level + 1, self.config.num_levels - 1)
+                self.current_level = min(
+                    self.current_level + 1, self.config.num_levels - 1
+                )
                 self._advance_streak = 0
                 self._episode_metrics.clear()
         elif avg <= self.config.threshold_retreat:

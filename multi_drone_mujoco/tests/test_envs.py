@@ -1,17 +1,15 @@
 """Tests for all environment types."""
 
 import numpy as np
-import pytest
-import gymnasium as gym
 
 from multi_drone_mujoco.envs.base_aviary import BaseAviary
-from multi_drone_mujoco.envs.hover_aviary import HoverAviary
-from multi_drone_mujoco.envs.velocity_aviary import VelocityAviary
-from multi_drone_mujoco.envs.multi_hover_aviary import MultiHoverAviary
 from multi_drone_mujoco.envs.fly_through_aviary import FlyThroughAviary
 from multi_drone_mujoco.envs.formation_aviary import FormationAviary
+from multi_drone_mujoco.envs.hover_aviary import HoverAviary
+from multi_drone_mujoco.envs.multi_hover_aviary import MultiHoverAviary
 from multi_drone_mujoco.envs.race_aviary import RaceAviary
-from multi_drone_mujoco.utils.enums import Physics, ActionType
+from multi_drone_mujoco.envs.velocity_aviary import VelocityAviary
+from multi_drone_mujoco.utils.enums import Physics
 
 
 class TestBaseAviary:
@@ -43,7 +41,14 @@ class TestBaseAviary:
 
     def test_physics_modes(self):
         """All physics modes should instantiate and step."""
-        for phys in [Physics.MJC, Physics.DYN, Physics.MJC_GND, Physics.MJC_DRAG, Physics.MJC_DW, Physics.MJC_GND_DRAG_DW]:
+        for phys in [
+            Physics.MJC,
+            Physics.DYN,
+            Physics.MJC_GND,
+            Physics.MJC_DRAG,
+            Physics.MJC_DW,
+            Physics.MJC_GND_DRAG_DW,
+        ]:
             env = BaseAviary(num_drones=1, ctrl_freq=240, sim_freq=240, physics=phys)
             env.reset()
             env.step(np.full(4, env.HOVER_RPM))

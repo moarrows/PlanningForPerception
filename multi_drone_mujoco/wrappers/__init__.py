@@ -4,10 +4,11 @@ Randomizes physical parameters, adds sensor noise, and simulates
 actuator delays to improve policy robustness for real-world deployment.
 """
 
-import numpy as np
-import gymnasium as gym
 from dataclasses import dataclass, field
 from typing import Optional
+
+import gymnasium as gym
+import numpy as np
 
 
 @dataclass
@@ -17,34 +18,35 @@ class DomainRandomizationConfig:
     Each parameter specifies the range as (min_scale, max_scale) relative
     to the nominal value, or absolute range for additive parameters.
     """
+
     # Multiplicative randomization (applied as nominal * uniform(lo, hi))
-    mass_range: tuple = (0.8, 1.2)           # ±20% mass
-    inertia_range: tuple = (0.8, 1.2)        # ±20% inertia
-    kf_range: tuple = (0.85, 1.15)           # ±15% thrust coefficient
-    km_range: tuple = (0.85, 1.15)           # ±15% torque coefficient
-    arm_length_range: tuple = (0.95, 1.05)   # ±5% arm length
-    motor_constant_range: tuple = (0.9, 1.1) # ±10% max RPM
+    mass_range: tuple = (0.8, 1.2)  # ±20% mass
+    inertia_range: tuple = (0.8, 1.2)  # ±20% inertia
+    kf_range: tuple = (0.85, 1.15)  # ±15% thrust coefficient
+    km_range: tuple = (0.85, 1.15)  # ±15% torque coefficient
+    arm_length_range: tuple = (0.95, 1.05)  # ±5% arm length
+    motor_constant_range: tuple = (0.9, 1.1)  # ±10% max RPM
 
     # Sensor noise (additive, per-step)
-    pos_noise_std: float = 0.002             # m (GPS-like noise)
-    vel_noise_std: float = 0.01              # m/s
-    rpy_noise_std: float = 0.005             # rad (IMU gyro bias)
-    ang_vel_noise_std: float = 0.02          # rad/s
+    pos_noise_std: float = 0.002  # m (GPS-like noise)
+    vel_noise_std: float = 0.01  # m/s
+    rpy_noise_std: float = 0.005  # rad (IMU gyro bias)
+    ang_vel_noise_std: float = 0.02  # rad/s
 
     # IMU bias (constant per episode, additive)
-    gyro_bias_std: float = 0.01              # rad/s constant offset
-    acc_bias_std: float = 0.05               # m/s^2 constant offset
+    gyro_bias_std: float = 0.01  # rad/s constant offset
+    acc_bias_std: float = 0.05  # m/s^2 constant offset
 
     # Actuator dynamics
-    action_delay_steps: int = 0              # steps of latency (0-3 typical)
-    action_delay_range: tuple = (0, 3)       # randomize delay per episode
-    motor_time_constant: float = 0.0        # first-order motor lag (seconds, 0=instant)
+    action_delay_steps: int = 0  # steps of latency (0-3 typical)
+    action_delay_range: tuple = (0, 3)  # randomize delay per episode
+    motor_time_constant: float = 0.0  # first-order motor lag (seconds, 0=instant)
     motor_time_constant_range: tuple = (0.0, 0.02)
 
     # Initial state perturbation
-    init_pos_noise_std: float = 0.02         # m
-    init_vel_noise_std: float = 0.01         # m/s
-    init_rpy_noise_std: float = 0.05         # rad
+    init_pos_noise_std: float = 0.02  # m
+    init_vel_noise_std: float = 0.01  # m/s
+    init_rpy_noise_std: float = 0.05  # rad
 
     # Randomize on each reset
     randomize_every_episode: bool = True
@@ -66,7 +68,9 @@ class DomainRandomizationWrapper(gym.Wrapper):
     >>> obs, info = env.reset()
     """
 
-    def __init__(self, env: gym.Env, config: Optional[DomainRandomizationConfig] = None):
+    def __init__(
+        self, env: gym.Env, config: Optional[DomainRandomizationConfig] = None
+    ):
         super().__init__(env)
         self.config = config or DomainRandomizationConfig()
         self._rng = np.random.default_rng()
@@ -112,8 +116,12 @@ class DomainRandomizationWrapper(gym.Wrapper):
         # Perturb initial state
         if self.config.init_pos_noise_std > 0:
             for i in range(self.env.NUM_DRONES):
-                self.env.pos[i] += self._rng.normal(0, self.config.init_pos_noise_std, size=3)
-                self.env.vel[i] += self._rng.normal(0, self.config.init_vel_noise_std, size=3)
+                self.env.pos[i] += self._rng.normal(
+                    0, self.config.init_pos_noise_std, size=3
+                )
+                self.env.vel[i] += self._rng.normal(
+                    0, self.config.init_vel_noise_std, size=3
+                )
 
         info["domain_params"] = self._get_domain_params()
         return self._add_obs_noise(obs), info
@@ -171,7 +179,7 @@ class DomainRandomizationWrapper(gym.Wrapper):
 
         # Recompute derived quantities
         env.HOVER_RPM = np.sqrt((env.M * env.G) / (4 * env.KF))
-        env.MAX_THRUST = 4 * env.KF * env.MAX_RPM ** 2
+        env.MAX_THRUST = 4 * env.KF * env.MAX_RPM**2
         env.WEIGHT = env.M * env.G
 
     def _add_obs_noise(self, obs):

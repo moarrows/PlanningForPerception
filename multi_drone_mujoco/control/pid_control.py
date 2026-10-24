@@ -127,7 +127,11 @@ class PIDControl:
 
         # Desired attitude from desired acceleration
         # (simplified: assumes small angles)
-        z_axis = target_acc / np.linalg.norm(target_acc) if np.linalg.norm(target_acc) > 1e-6 else np.array([0, 0, 1])
+        z_axis = (
+            target_acc / np.linalg.norm(target_acc)
+            if np.linalg.norm(target_acc) > 1e-6
+            else np.array([0, 0, 1])
+        )
 
         target_yaw = target_rpy[2]
         x_c = np.array([np.cos(target_yaw), np.sin(target_yaw), 0])
@@ -148,14 +152,24 @@ class PIDControl:
         cur_rpy = self._quatToRPY(cur_quat)
 
         # Attitude error
-        rpy_e = np.array([target_roll - cur_rpy[0], target_pitch - cur_rpy[1], target_yaw - cur_rpy[2]])
+        rpy_e = np.array(
+            [
+                target_roll - cur_rpy[0],
+                target_pitch - cur_rpy[1],
+                target_yaw - cur_rpy[2],
+            ]
+        )
         # Wrap yaw error
         rpy_e[2] = (rpy_e[2] + np.pi) % (2 * np.pi) - np.pi
 
         self.integral_rpy_e += rpy_e * control_timestep
         self.integral_rpy_e = np.clip(self.integral_rpy_e, -0.5, 0.5)
 
-        d_rpy_e = (rpy_e - self.last_rpy_e) / control_timestep if control_timestep > 0 else np.zeros(3)
+        d_rpy_e = (
+            (rpy_e - self.last_rpy_e) / control_timestep
+            if control_timestep > 0
+            else np.zeros(3)
+        )
 
         # Desired torques
         target_torques = (
@@ -185,22 +199,26 @@ class PIDControl:
         s2 = np.sqrt(2)
         km_kf = self.KM / self.KF
 
-        A = np.array([
-            [1, 1, 1, 1],
-            [self.L / s2, self.L / s2, -self.L / s2, -self.L / s2],
-            [-self.L / s2, self.L / s2, self.L / s2, -self.L / s2],
-            [-km_kf, km_kf, -km_kf, km_kf],
-        ])
+        A = np.array(
+            [
+                [1, 1, 1, 1],
+                [self.L / s2, self.L / s2, -self.L / s2, -self.L / s2],
+                [-self.L / s2, self.L / s2, self.L / s2, -self.L / s2],
+                [-km_kf, km_kf, -km_kf, km_kf],
+            ]
+        )
 
         # Scale torques so they don't exceed what's achievable
         # Max achievable torque is limited by motor RPM range
-        max_torque_xy = self.L / s2 * self.KF * self.MAX_RPM ** 2 * 0.3  # Use 30% margin
-        max_torque_z = km_kf * self.KF * self.MAX_RPM ** 2 * 0.3
-        torques = np.array([
-            np.clip(torques[0], -max_torque_xy, max_torque_xy),
-            np.clip(torques[1], -max_torque_xy, max_torque_xy),
-            np.clip(torques[2], -max_torque_z, max_torque_z),
-        ])
+        max_torque_xy = self.L / s2 * self.KF * self.MAX_RPM**2 * 0.3  # Use 30% margin
+        max_torque_z = km_kf * self.KF * self.MAX_RPM**2 * 0.3
+        torques = np.array(
+            [
+                np.clip(torques[0], -max_torque_xy, max_torque_xy),
+                np.clip(torques[1], -max_torque_xy, max_torque_xy),
+                np.clip(torques[2], -max_torque_z, max_torque_z),
+            ]
+        )
 
         b = np.array([thrust, torques[0], torques[1], torques[2]])
         # b is [total_thrust, tau_x, tau_y, tau_z]
@@ -212,7 +230,7 @@ class PIDControl:
             motor_forces = np.linalg.lstsq(A, b, rcond=None)[0]
 
         # Clamp to valid range
-        motor_forces = np.clip(motor_forces, 0, self.KF * self.MAX_RPM ** 2)
+        motor_forces = np.clip(motor_forces, 0, self.KF * self.MAX_RPM**2)
         rpm = np.sqrt(motor_forces / self.KF)
         return np.clip(rpm, 0, self.MAX_RPM)
 

@@ -29,9 +29,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
-import numpy as np
-
 import mujoco
+import numpy as np
 
 
 @dataclass
@@ -39,9 +38,9 @@ class RenderStats:
     """Timing for one renderer. ``wait_ms`` is filled in by callers that queue."""
 
     frames: int = 0
-    pose_ms: float = 0.0        # writing state + kinematics
-    raster_ms: float = 0.0      # update_scene + render
-    wait_ms: float = 0.0        # time callers spent queued (set externally)
+    pose_ms: float = 0.0  # writing state + kinematics
+    raster_ms: float = 0.0  # update_scene + render
+    wait_ms: float = 0.0  # time callers spent queued (set externally)
     _raster_samples: list = field(default_factory=list, repr=False)
 
     def as_dict(self) -> dict:
@@ -83,12 +82,19 @@ class SharedStaticRenderer:
     #:              sufficient. Must be proven with bench/verify.py before use.
     STATE_TRANSFER_MODES = ("copy", "minimal")
 
-    def __init__(self, model: "mujoco.MjModel", width: int, height: int,
-                 want_seg: bool = False, state_transfer: str = "copy"):
+    def __init__(
+        self,
+        model: mujoco.MjModel,
+        width: int,
+        height: int,
+        want_seg: bool = False,
+        state_transfer: str = "copy",
+    ):
         if state_transfer not in self.STATE_TRANSFER_MODES:
             raise ValueError(
                 f"state_transfer must be one of {self.STATE_TRANSFER_MODES}, "
-                f"got {state_transfer!r}")
+                f"got {state_transfer!r}"
+            )
         self.model = model
         self.width = int(width)
         self.height = int(height)
@@ -104,7 +110,7 @@ class SharedStaticRenderer:
 
     # -- validation --------------------------------------------------------
 
-    def assert_compatible(self, other_model: "mujoco.MjModel", cam_name: str) -> None:
+    def assert_compatible(self, other_model: mujoco.MjModel, cam_name: str) -> None:
         """Raise if ``other_model`` cannot safely be rendered by this instance.
 
         Catches the common failure -- a differently-built world -- before it can
@@ -128,9 +134,9 @@ class SharedStaticRenderer:
 
     # -- rendering ---------------------------------------------------------
 
-    def render(self, data: "mujoco.MjData", cam_name: str,
-               want_seg: Optional[bool] = None
-               ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def render(
+        self, data: mujoco.MjData, cam_name: str, want_seg: Optional[bool] = None
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Render one env's camera.
 
         ``data`` belongs to the *calling env*, not to this renderer. Only the
@@ -201,10 +207,12 @@ class SharedStaticRenderer:
             pass
 
 
-def attach_shared_renderer(envs, want_seg: bool = False,
-                           renderer: Optional[SharedStaticRenderer] = None,
-                           state_transfer: str = "copy"
-                           ) -> SharedStaticRenderer:
+def attach_shared_renderer(
+    envs,
+    want_seg: bool = False,
+    renderer: Optional[SharedStaticRenderer] = None,
+    state_transfer: str = "copy",
+) -> SharedStaticRenderer:
     """Point a list of same-process envs at one shared renderer.
 
     The caller is asserting that these envs have identical static worlds.
@@ -215,8 +223,11 @@ def attach_shared_renderer(envs, want_seg: bool = False,
     head = envs[0]
     if renderer is None:
         renderer = SharedStaticRenderer(
-            head.model, width=int(head.IMG_RES[0]), height=int(head.IMG_RES[1]),
-            want_seg=want_seg, state_transfer=state_transfer,
+            head.model,
+            width=int(head.IMG_RES[0]),
+            height=int(head.IMG_RES[1]),
+            want_seg=want_seg,
+            state_transfer=state_transfer,
         )
 
     for e in envs:

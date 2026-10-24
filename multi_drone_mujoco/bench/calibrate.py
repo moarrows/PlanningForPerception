@@ -11,10 +11,12 @@ one context's throughput -- which is exactly the contention this is measuring.
 So the curve is measured rather than predicted.
 
 Run:
-    python -m multi_drone_mujoco.bench.calibrate --n-envs 30 --workers 1,2,3,5,6,10,15,30
+    python -m multi_drone_mujoco.bench.calibrate
+        --n-envs 30 --workers 1,2,3,5,6,10,15,30
 """
 
 import os
+
 os.environ.setdefault("MUJOCO_GL", "egl")
 
 import argparse
@@ -25,13 +27,19 @@ from pathlib import Path
 import numpy as np
 
 from multi_drone_mujoco.bench._common import (
-    DEFAULT_ENV, GPUSampler, cpu_count, gpu_info, host_rss_mb,
-    make_env_factory, timing_summary,
+    DEFAULT_ENV,
+    GPUSampler,
+    cpu_count,
+    gpu_info,
+    host_rss_mb,
+    make_env_factory,
+    timing_summary,
 )
 
 
-def measure(env_spec: str, n_envs: int, n_workers: int, steps: int,
-            warmup: int, want_seg: bool) -> dict:
+def measure(
+    env_spec: str, n_envs: int, n_workers: int, steps: int, warmup: int, want_seg: bool
+) -> dict:
     from multi_drone_mujoco.vec import SharedRenderVecEnv
 
     env_fns = [make_env_factory(env_spec, i) for i in range(n_envs)]
@@ -64,9 +72,11 @@ def measure(env_spec: str, n_envs: int, n_workers: int, steps: int,
             "vec_step": timing_summary(times),
             "host_rss_mb": rss,
             "renderer_raster_mean_ms": round(
-                float(np.mean([r["raster_mean_ms"] for r in render if r])), 4),
+                float(np.mean([r["raster_mean_ms"] for r in render if r])), 4
+            ),
             "renderer_raster_p99_ms": round(
-                float(np.max([r["raster_p99_ms"] for r in render if r])), 4),
+                float(np.max([r["raster_p99_ms"] for r in render if r])), 4
+            ),
             **gpu_report,
         }
     finally:
@@ -99,6 +109,7 @@ def choose_m(rows: list, tolerance: float = 0.05) -> dict:
 def plot(report: dict, png_path: Path):
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except Exception:
@@ -116,10 +127,20 @@ def plot(report: dict, png_path: Path):
 
     for ax, y, title, ylab, color in (
         (axes[0], fps, "Throughput vs M", "env-steps / sec", "tab:blue"),
-        (axes[1], p99, "Step latency tail vs M\n(the 'waiting' to minimise)",
-         "p99 vec step (ms)", "tab:orange"),
-        (axes[2], vram, "Peak VRAM vs M\n(cost of each extra context)",
-         "MB", "tab:red"),
+        (
+            axes[1],
+            p99,
+            "Step latency tail vs M\n(the 'waiting' to minimise)",
+            "p99 vec step (ms)",
+            "tab:orange",
+        ),
+        (
+            axes[2],
+            vram,
+            "Peak VRAM vs M\n(cost of each extra context)",
+            "MB",
+            "tab:red",
+        ),
     ):
         if any(v is None for v in y):
             ax.text(0.5, 0.5, "no NVML", ha="center", va="center")
@@ -127,8 +148,13 @@ def plot(report: dict, png_path: Path):
             ax.plot(m, y, "o-", color=color)
         if rec is not None:
             ax.axvline(rec, ls="--", color="k", alpha=0.5)
-            ax.annotate(f"M={rec}", xy=(rec, ax.get_ylim()[1]),
-                        xytext=(3, -12), textcoords="offset points", fontsize=9)
+            ax.annotate(
+                f"M={rec}",
+                xy=(rec, ax.get_ylim()[1]),
+                xytext=(3, -12),
+                textcoords="offset points",
+                fontsize=9,
+            )
         ax.set_xlabel("M (workers / GL contexts)")
         ax.set_ylabel(ylab)
         ax.set_title(title)
@@ -141,18 +167,30 @@ def plot(report: dict, png_path: Path):
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--env", default=DEFAULT_ENV)
     p.add_argument("--n-envs", type=int, default=30)
-    p.add_argument("--workers", default="",
-                   help="comma-separated M values (default: divisors-ish of N)")
+    p.add_argument(
+        "--workers",
+        default="",
+        help="comma-separated M values (default: divisors-ish of N)",
+    )
     p.add_argument("--steps", type=int, default=200)
     p.add_argument("--warmup", type=int, default=30)
     p.add_argument("--seg", action="store_true")
-    p.add_argument("--tolerance", type=float, default=0.05,
-                   help="accept M whose p99 is within this fraction of the best")
-    p.add_argument("--out", default="runs/bench/calibrate", help="base path for .json and .png output")
+    p.add_argument(
+        "--tolerance",
+        type=float,
+        default=0.05,
+        help="accept M whose p99 is within this fraction of the best",
+    )
+    p.add_argument(
+        "--out",
+        default="runs/bench/calibrate",
+        help="base path for .json and .png output",
+    )
     args = p.parse_args()
 
     n = args.n_envs
@@ -180,19 +218,23 @@ def main():
         print(f"  M={m:>3} ...", end="", flush=True)
         row = measure(args.env, n, m, args.steps, args.warmup, args.seg)
         report["sweep"].append(row)
-        print(f" {row['env_steps_per_sec']:>8} env-steps/s"
-              f"  p99 {row['vec_step']['p99_ms']:>7} ms"
-              f"  VRAM {row['vram_peak_mb']} MB"
-              f"  RSS {row['host_rss_mb']} MB")
+        print(
+            f" {row['env_steps_per_sec']:>8} env-steps/s"
+            f"  p99 {row['vec_step']['p99_ms']:>7} ms"
+            f"  VRAM {row['vram_peak_mb']} MB"
+            f"  RSS {row['host_rss_mb']} MB"
+        )
 
     report["recommendation"] = choose_m(report["sweep"], args.tolerance)
     rec = report["recommendation"]
 
     print()
     if rec:
-        print(f"Recommended M = {rec['recommended_workers']}"
-              f"  (p99 {rec['accepted_p99_ms']} ms vs best {rec['best_p99_ms']} ms,"
-              f"  VRAM {rec['vram_peak_mb']} MB)")
+        print(
+            f"Recommended M = {rec['recommended_workers']}"
+            f"  (p99 {rec['accepted_p99_ms']} ms vs best {rec['best_p99_ms']} ms,"
+            f"  VRAM {rec['vram_peak_mb']} MB)"
+        )
         if rec["recommended_workers"] >= report["cpu_count"]:
             print("  M is at/above your core count — the simple grouped-worker")
             print("  design is the right fit; a render server would not help.")

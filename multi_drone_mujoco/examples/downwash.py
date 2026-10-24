@@ -2,9 +2,9 @@
 
 import numpy as np
 
-from multi_drone_mujoco.envs.base_aviary import BaseAviary
 from multi_drone_mujoco.control.pid_control import PIDControl
-from multi_drone_mujoco.utils.enums import DroneModel, Physics, ActionType
+from multi_drone_mujoco.envs.base_aviary import BaseAviary
+from multi_drone_mujoco.utils.enums import ActionType, DroneModel, Physics
 
 
 def downwash_demo():
@@ -15,10 +15,12 @@ def downwash_demo():
     print("  Physics: MJC_GND_DRAG_DW (full aerodynamic effects)")
     print("=" * 60)
 
-    initial_xyzs = np.array([
-        [0.0, 0.0, 0.7],   # Bottom drone (will experience downwash)
-        [0.0, 0.0, 1.5],   # Top drone
-    ])
+    initial_xyzs = np.array(
+        [
+            [0.0, 0.0, 0.7],  # Bottom drone (will experience downwash)
+            [0.0, 0.0, 1.5],  # Top drone
+        ]
+    )
     targets = [
         np.array([0.0, 0.0, 0.7]),
         np.array([0.0, 0.0, 1.5]),
@@ -54,9 +56,11 @@ def downwash_demo():
         obs, _, terminated, _, _ = env.step(rpms.flatten())
 
         if step % 96 == 0:
-            print(f"  t={step * env.CTRL_TIMESTEP:5.1f}s | "
-                  f"Bottom z={env.pos[0, 2]:.4f} (target=0.7) | "
-                  f"Top z={env.pos[1, 2]:.4f} (target=1.5)")
+            print(
+                f"  t={step * env.CTRL_TIMESTEP:5.1f}s | "
+                f"Bottom z={env.pos[0, 2]:.4f} (target=0.7) | "
+                f"Top z={env.pos[1, 2]:.4f} (target=1.5)"
+            )
 
         if terminated:
             break

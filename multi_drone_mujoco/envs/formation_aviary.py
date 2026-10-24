@@ -7,7 +7,12 @@ import numpy as np
 from gymnasium import spaces
 
 from multi_drone_mujoco.envs.base_aviary import BaseAviary
-from multi_drone_mujoco.utils.enums import DroneModel, Physics, ActionType, ObservationType
+from multi_drone_mujoco.utils.enums import (
+    ActionType,
+    DroneModel,
+    ObservationType,
+    Physics,
+)
 
 
 class FormationAviary(BaseAviary):
@@ -33,22 +38,26 @@ class FormationAviary(BaseAviary):
         if formation_offsets is None:
             # Equilateral triangle at 0.5m spacing
             angle_step = 2 * np.pi / num_drones
-            self.FORMATION_OFFSETS = np.array([
-                [0.3 * np.cos(i * angle_step), 0.3 * np.sin(i * angle_step), 0]
-                for i in range(num_drones)
-            ])
+            self.FORMATION_OFFSETS = np.array(
+                [
+                    [0.3 * np.cos(i * angle_step), 0.3 * np.sin(i * angle_step), 0]
+                    for i in range(num_drones)
+                ]
+            )
         else:
             self.FORMATION_OFFSETS = np.array(formation_offsets)
 
         # Path for the formation center (waypoints)
         if formation_center_path is None:
-            self.CENTER_PATH = np.array([
-                [0, 0, 1.0],
-                [1, 0, 1.0],
-                [1, 1, 1.2],
-                [0, 1, 1.0],
-                [0, 0, 1.0],
-            ])
+            self.CENTER_PATH = np.array(
+                [
+                    [0, 0, 1.0],
+                    [1, 0, 1.0],
+                    [1, 1, 1.2],
+                    [0, 1, 1.0],
+                    [0, 0, 1.0],
+                ]
+            )
         else:
             self.CENTER_PATH = np.array(formation_center_path)
 
@@ -101,8 +110,11 @@ class FormationAviary(BaseAviary):
         )
 
     def _observationSpace(self):
-        # per drone: pos(3) + rpy(3) + vel(3) + angvel(3) + target(3) + rel_target(3) = 18
-        return spaces.Box(low=-np.inf, high=np.inf, shape=(18 * self.NUM_DRONES,), dtype=np.float32)
+        """per drone: pos(3) + rpy(3) + vel(3) + angvel(3)
+        + target(3) + rel_target(3) = 18"""
+        return spaces.Box(
+            low=-np.inf, high=np.inf, shape=(18 * self.NUM_DRONES,), dtype=np.float32
+        )
 
     def _preprocessAction(self, action):
         action = np.clip(np.array(action).reshape(self.NUM_DRONES, 4), -1, 1)
@@ -117,9 +129,18 @@ class FormationAviary(BaseAviary):
         for i in range(self.NUM_DRONES):
             state = self._getDroneStateVector(i)
             rel = targets[i] - self.pos[i]
-            obs_list.append(np.hstack([
-                state[0:3], state[7:10], state[10:13], state[13:16], targets[i], rel,
-            ]))
+            obs_list.append(
+                np.hstack(
+                    [
+                        state[0:3],
+                        state[7:10],
+                        state[10:13],
+                        state[13:16],
+                        targets[i],
+                        rel,
+                    ]
+                )
+            )
         return np.concatenate(obs_list).astype(np.float32)
 
     def _computeReward(self):
@@ -135,15 +156,17 @@ class FormationAviary(BaseAviary):
         # Bonus for maintaining formation shape (inter-drone distances)
         for i in range(self.NUM_DRONES):
             for j in range(i + 1, self.NUM_DRONES):
-                desired_dist = np.linalg.norm(self.FORMATION_OFFSETS[i] - self.FORMATION_OFFSETS[j])
+                desired_dist = np.linalg.norm(
+                    self.FORMATION_OFFSETS[i] - self.FORMATION_OFFSETS[j]
+                )
                 actual_dist = np.linalg.norm(self.pos[i] - self.pos[j])
                 total -= 0.5 * abs(actual_dist - desired_dist)
 
         self._advance_path()
-        
+
         if self._computeTerminated():
             total -= 100.0
-            
+
         return float(total)
 
     def _computeTerminated(self):
