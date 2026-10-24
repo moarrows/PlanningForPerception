@@ -106,3 +106,19 @@ class CustomAviary(BaseAviary):
             "waypoints_reached": [int(idx) for idx in self.current_waypoint_idx],
             "total_waypoints": len(self.WAYPOINTS),
         }
+
+    def step(self, action):
+        # Current simulation time
+        t = self.data.time
+
+        # Move obstacles sinusoidally
+        for i, actuator_id in enumerate(self.obstacle_actuator_ids):
+            amplitude = 0.5
+            frequency = 0.2
+
+            self.data.ctrl[actuator_id] = (
+                amplitude * np.sin(2 * np.pi * frequency * t)
+            )
+
+        # Let BaseAviary do the normal simulation step
+        return super().step(action)

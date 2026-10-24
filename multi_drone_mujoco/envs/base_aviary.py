@@ -444,6 +444,7 @@ class BaseAviary(gym.Env):
             gimbal_control=gimbal_control,
             timestep=self.SIM_TIMESTEP,
         )
+        self.xml_str = xml_str
         self.model = mujoco.MjModel.from_xml_string(xml_str)
         self.data = mujoco.MjData(self.model)
 
