@@ -31,7 +31,7 @@ class CustomAviary(BaseAviary):
         initial_xyzs=None,
         render_mode=None,
     ):
-        self.EPISODE_LEN_SEC = 20
+        self.EPISODE_LEN_SEC = 30
         self.WAYPOINT_RADIUS = waypoint_radius
 
         if waypoints is None:

@@ -33,6 +33,8 @@ def add_obstacles(env):
             x += 0.5 * np.sign(x + 0.01)
 
         h = np.random.uniform(0.4, 1.5)
+        w = np.random.uniform(0.4, 0.6)
+        l = np.random.uniform(0.4, 0.6)
         r = np.random.uniform(0.03, 0.07)
         color = colors[i % len(colors)]
 
@@ -44,7 +46,7 @@ def add_obstacles(env):
                 name="obs_{i}_joint"
                 type="slide"
                 axis="1 0 0"
-                range="-0.5 0.5"
+                range="-2.0 2.0"
                 limited="true"/>
 
             <geom
@@ -52,7 +54,7 @@ def add_obstacles(env):
                 size="{r:.3f} {h / 2:.2f}"
                 rgba="{color}"/>
             
-            <inertial pos="0 0 0" mass="0.1" diaginertia="0.0001 0.0001 0.0001"/>
+            <inertial pos="0 0 0" mass="0.01" diaginertia="0.0001 0.0001 0.0001"/>
 
         </body>
         '''
@@ -176,24 +178,126 @@ def view_env():
 
     with mujoco.viewer.launch_passive(env.model, env.data) as viewer:
         while viewer.is_running():
-            t = env.data.time
-
-            # Move the first 10 obstacles sinusoidally
-            for i, actuator_id in enumerate(env.obstacle_actuator_ids):
-                amplitude = 0.5
-                frequency = 0.2
-
-                env.data.ctrl[actuator_id] = amplitude * np.sin(
-                    2 * np.pi * frequency * t
-                )
-
-            mujoco.mj_step(env.model, env.data)
+            action = np.zeros(env.action_space.shape, dtype=np.float32)
             viewer.sync()
+            env.step(action)
 
             time.sleep(0.01)
 
     env.close()
 
+def print_mujoco_diagnostics(env):
+    model = env.unwrapped.model
+    data = env.unwrapped.data
+
+    print("\n========== MUJOCO DIAGNOSTICS ==========")
+
+    # Generalized state
+    print("qpos:")
+    print(data.qpos)
+
+    print("\nqvel:")
+    print(data.qvel)
+
+    print("\nqacc:")
+    print(data.qacc)
+
+    print("\nctrl:")
+    print(data.ctrl)
+
+    # Warning information
+    print("\nWarnings:")
+    for i, warning in enumerate(data.warning):
+        if warning.number > 0:
+            print(
+                f"  warning {i}: "
+                f"count={warning.number}, "
+                f"lastinfo={warning.lastinfo}"
+            )
+
+    # DOF information
+    print("\nDOF information:")
+    for dof in range(model.nv):
+        joint_id = model.dof_jntid[dof]
+        joint_name = mujoco.mj_id2name(
+            model,
+            mujoco.mjtObj.mjOBJ_JOINT,
+            joint_id
+        )
+
+        print(
+            f"DOF {dof}: "
+            f"joint={joint_name}, "
+            f"qvel={data.qvel[dof]:.6g}, "
+            f"qacc={data.qacc[dof]:.6g}"
+        )
+
+    print("=========================================\n")
+
+def test_env():
+    env = CustomAviary(record=False, gui=False)
+    add_obstacles(env)
+
+    obs, info = env.reset()
+
+    for step in range(1000):
+        print(f"\nStep {step}:")
+        print(f"Time: {env.unwrapped.data.time:.3f} s")
+        action = np.zeros(env.action_space.shape, dtype=np.float32)
+
+        obs, reward, terminated, truncated, info = env.step(action)
+
+        print_mujoco_diagnostics(env)
+
+        for i in range(env.unwrapped.model.nu):
+            name = mujoco.mj_id2name(
+                env.unwrapped.model,
+                mujoco.mjtObj.mjOBJ_ACTUATOR,
+                i,
+            )
+
+            print(
+                f"{i}: {name} | "
+                f"ctrl={env.unwrapped.data.ctrl[i]:.6f} | "
+                f"fclorce={env.unwrapped.data.actuator_force[i]:.6f}"
+            )
+
+        # Check each observation component
+        for key, value in obs.items():
+            if not np.all(np.isfinite(value)):
+                print(f"BAD OBS at step {step}: {key}")
+                print("shape:", value.shape)
+                print("dtype:", value.dtype)
+                print("value:", value)
+                return
+
+        # Check reward
+        if not np.isfinite(reward):
+            print(f"BAD REWARD at step {step}: {reward}")
+            return
+
+        # Check MuJoCo state
+        if not np.all(np.isfinite(env.unwrapped.data.qpos)):
+            print(f"BAD QPOS at step {step}")
+            print(env.unwrapped.data.qpos)
+            return
+
+        if not np.all(np.isfinite(env.unwrapped.data.qvel)):
+            print(f"BAD QVEL at step {step}")
+            print(env.unwrapped.data.qvel)
+            return
+
+        if terminated:
+            print(f"Episode terminated ended at step {step}")
+            return
+
+        if truncated:
+            print(f"Episode truncated ended at step {step}")
+            return
+
+    print("Environment survived 1000 steps")
 
 if __name__ == "__main__":
+    # test_env()  # Test the environment for stability
+    # main()  # Train the PPO agent
     view_env()  # View the environment with obstacles
