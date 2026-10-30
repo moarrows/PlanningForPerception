@@ -140,11 +140,11 @@ def main():
 
     # Initialize the PPO model
     # We use a simple MLP policy.
-    model = PPO("MultiInputPolicy", env, verbose=1)
+    model = PPO("MultiInputPolicy", env, verbose=1, policy_kwargs=dict(log_std_init=-2.0))
 
     # Train for 100,000 steps.
     # This is relatively short but should show the reward trend.
-    model.learn(total_timesteps=100000, callback=eval_callback)
+    model.learn(total_timesteps=1000000, callback=eval_callback)
 
     print("Training finished. Evaluating final policy...")
 
@@ -186,6 +186,7 @@ def view_env():
 
     env.close()
 
+
 def print_mujoco_diagnostics(env):
     model = env.unwrapped.model
     data = env.unwrapped.data
@@ -209,21 +210,13 @@ def print_mujoco_diagnostics(env):
     print("\nWarnings:")
     for i, warning in enumerate(data.warning):
         if warning.number > 0:
-            print(
-                f"  warning {i}: "
-                f"count={warning.number}, "
-                f"lastinfo={warning.lastinfo}"
-            )
+            print(f"  warning {i}: count={warning.number}, lastinfo={warning.lastinfo}")
 
     # DOF information
     print("\nDOF information:")
     for dof in range(model.nv):
         joint_id = model.dof_jntid[dof]
-        joint_name = mujoco.mj_id2name(
-            model,
-            mujoco.mjtObj.mjOBJ_JOINT,
-            joint_id
-        )
+        joint_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, joint_id)
 
         print(
             f"DOF {dof}: "
@@ -233,6 +226,7 @@ def print_mujoco_diagnostics(env):
         )
 
     print("=========================================\n")
+
 
 def test_env():
     env = CustomAviary(record=False, gui=False)
@@ -297,7 +291,8 @@ def test_env():
 
     print("Environment survived 1000 steps")
 
+
 if __name__ == "__main__":
     # test_env()  # Test the environment for stability
-    # main()  # Train the PPO agent
-    view_env()  # View the environment with obstacles
+    main()  # Train the PPO agent
+    # view_env()  # View the environment with obstacles

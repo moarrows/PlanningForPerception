@@ -9,7 +9,7 @@ from multi_drone_mujoco.envs.hover_aviary import HoverAviary
 from multi_drone_mujoco.envs.multi_hover_aviary import MultiHoverAviary
 from multi_drone_mujoco.envs.race_aviary import RaceAviary
 from multi_drone_mujoco.envs.velocity_aviary import VelocityAviary
-from multi_drone_mujoco.utils.enums import Physics
+from multi_drone_mujoco.utils.enums import ObservationType, Physics
 
 
 class TestBaseAviary:

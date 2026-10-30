@@ -31,6 +31,10 @@ from multi_drone_mujoco.utils.enums import (
 ASSETS_PATH = Path(__file__).resolve().parent.parent / "assets"
 CF2_MESH_DIR = Path(os.environ.get("MJ_DRONES_CF2_ASSETS", str(ASSETS_PATH / "cf2")))
 GIMBAL_STAGE_MASS = 0.01
+GIMBAL_Y_MIN = -np.pi / 2
+GIMBAL_Y_MAX = np.pi / 2
+GIMBAL_Z_MIN = -np.pi
+GIMBAL_Z_MAX = np.pi
 
 ################################################################################
 # Crazyflie 2.x physical parameters (from Forster 2015 system identification)
@@ -206,14 +210,14 @@ def _generate_aviary_xml(
             if gimbal_control:
                 drone_bodies += f"""      <body name="{prefix}_gimbal" pos="0 0 0">
         <joint name="{prefix}_gimbal_joint_z" type="hinge"
-               axis="0 0 1" range="0 6.2832" damping="1.0"/>
+               axis="0 0 1" range="{GIMBAL_Z_MIN} {GIMBAL_Z_MAX}" damping="1.0"/>
         <inertial pos="0 0 0" mass="{GIMBAL_STAGE_MASS}"
                   diaginertia="1e-7 1e-7 1e-7"/>
         <geom name="{prefix}_gimbal_geom" type="box"
               size="0.02 0.02 0.02" rgba="0.5 0.5 0.5 1"/>
         <body name="{prefix}_gimbal_pitch" pos="0 0 0">
             <joint name="{prefix}_gimbal_joint_y" type="hinge"
-                axis="0 1 0" range="-1.5708 1.5708" damping="1.0"/>
+                axis="0 1 0" range="{GIMBAL_Y_MIN} {GIMBAL_Y_MAX}" damping="1.0"/>
             <inertial pos="0 0 0" mass="{GIMBAL_STAGE_MASS}"
                 diaginertia="1e-7 1e-7 1e-7"/>
             <camera name="{prefix}_gimbal_cam" pos="0 0 0"
@@ -224,12 +228,12 @@ def _generate_aviary_xml(
                 actuators += (
                     f'    <position name="{prefix}_gimbal_y_motor" gear="1" '
                     f'joint="{prefix}_gimbal_joint_y" ctrllimited="true" '
-                    'ctrlrange="-1.5708 1.5708"/>\n'
+                    f'ctrlrange="{GIMBAL_Y_MIN} {GIMBAL_Y_MAX}"/>\n'
                 )
                 actuators += (
                     f'    <position name="{prefix}_gimbal_z_motor" gear="1" '
                     f'joint="{prefix}_gimbal_joint_z" ctrllimited="true" '
-                    'ctrlrange="0 6.2832"/>\n'
+                    f'ctrlrange="{GIMBAL_Z_MIN} {GIMBAL_Z_MAX}"/>\n'
                 )
 
         drone_bodies += "    </body>\n"
@@ -661,8 +665,8 @@ class BaseAviary(gym.Env):
                         f"drone{i}_gimbal_z_motor",
                     )
 
-                    # self.data.ctrl[gimbal_y_actuator_id] = gimbal[i, 0]
-                    # self.data.ctrl[gimbal_z_actuator_id] = gimbal[i, 1]
+                    self.data.ctrl[gimbal_y_actuator_id] = gimbal[i, 0]
+                    self.data.ctrl[gimbal_z_actuator_id] = gimbal[i, 1]
                 if self.PHYSICS == Physics.MJC:
                     self._physics(clipped_action[i, :], i)
                 elif self.PHYSICS == Physics.DYN:
@@ -1103,10 +1107,15 @@ class BaseAviary(gym.Env):
     ############################################################################
 
     def _preprocessAction(self, action):
-        """Convert action to RPMs based on action type."""
+        """Convert action to RPMs and physical gimbal angles."""
         if self.ACT_TYPE == ActionType.RPM:
             if self.GIMBAL_CONTROL:
-                action = np.clip(np.array(action).reshape(self.NUM_DRONES, 6), -1, 1)
+                action = np.asarray(action, dtype=np.float64).reshape(
+                    self.NUM_DRONES, 6
+                )
+                action[:, :4] = np.clip(action[:, :4], -1, 1)
+                action[:, 4] = np.clip(action[:, 4], GIMBAL_Y_MIN, GIMBAL_Y_MAX)
+                action[:, 5] = np.clip(action[:, 5], GIMBAL_Z_MIN, GIMBAL_Z_MAX)
 
                 rpms = np.zeros((self.NUM_DRONES, 4))
                 gimbal = np.zeros((self.NUM_DRONES, 2))
@@ -1223,8 +1232,14 @@ class BaseAviary(gym.Env):
     def _actionSpace(self):
         """Define action space based on action type."""
         if self.GIMBAL_CONTROL and self.ACT_TYPE == ActionType.RPM:
-            act_lower = np.full(6 * self.NUM_DRONES, -1.0)
-            act_upper = np.full(6 * self.NUM_DRONES, 1.0)
+            act_lower = np.tile(
+                np.array([-1, -1, -1, -1, GIMBAL_Y_MIN, GIMBAL_Z_MIN]),
+                self.NUM_DRONES,
+            )
+            act_upper = np.tile(
+                np.array([1, 1, 1, 1, GIMBAL_Y_MAX, GIMBAL_Z_MAX]),
+                self.NUM_DRONES,
+            )
         elif self.ACT_TYPE == ActionType.RPM:
             act_lower = np.full(4 * self.NUM_DRONES, -1.0)
             act_upper = np.full(4 * self.NUM_DRONES, 1.0)

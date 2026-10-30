@@ -102,6 +102,11 @@ python play.py         # visualize trained policy
 | `RaceAviary` | 21 | 4 | Gate racing with lap timing |
 | `MultiAgentAviary` | per-agent | per-agent | PettingZoo parallel wrapper |
 
+When `BaseAviary` uses RPM actions with gimbal control, each drone's action is
+`[rpm_1, rpm_2, rpm_3, rpm_4, gimbal_y, gimbal_z]`. The RPM values are
+normalized to `[-1, 1]`, while `gimbal_y` is in `[-pi/2, pi/2]` radians and
+`gimbal_z` is in `[0, 2pi]` radians.
+
 ## Physics Modes
 
 | Mode | Description |

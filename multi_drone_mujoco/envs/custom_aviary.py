@@ -4,6 +4,7 @@ Task: fly through a sequence of waypoints as quickly as possible.
 """
 
 import numpy as np
+import mujoco
 
 from multi_drone_mujoco.envs.base_aviary import BaseAviary
 from multi_drone_mujoco.utils.enums import (
@@ -70,16 +71,48 @@ class CustomAviary(BaseAviary):
             gimbal_control=True,
         )
 
+        self._obstacle_body_ids = {
+            mujoco.mj_name2id(
+                self.model, mujoco.mjtObj.mjOBJ_BODY, f"obs_{i}"
+            )
+            for i in range(25)
+        }
+        self._drone_body_ids = {
+            mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, f"drone{i}"): i
+            for i in range(self.NUM_DRONES)
+        }
+
     def reset(self, seed=None, options=None):
         self.current_waypoint_idx[:] = 0
         return super().reset(seed=seed, options=options)
 
+    def _obstacleCollisions(self):
+        """Returns array of contact counts with obstacles, one per drone."""
+        hits = np.zeros(self.NUM_DRONES)
+        for k in range(self.data.ncon):
+            c = self.data.contact[k]
+            b1 = self.model.geom_bodyid[c.geom1]
+            b2 = self.model.geom_bodyid[c.geom2]
+            # rootid maps child bodies (e.g. gimbal) back to the drone body
+            r1 = self.model.body_rootid[b1]
+            r2 = self.model.body_rootid[b2]
+            for drone_root, other in ((r1, r2), (r2, r1)):
+                if (
+                    drone_root in self._drone_body_ids
+                    and other in self._obstacle_body_ids
+                ):
+                    hits[self._drone_body_ids[drone_root]] += 1
+        return hits
+
     def _computeReward(self):
         total = 0.0
+        collisions = self._obstacleCollisions()
+
         for i in range(self.NUM_DRONES):
             wp_idx = min(self.current_waypoint_idx[i], len(self.WAYPOINTS) - 1)
             wp = self.WAYPOINTS[wp_idx]
             dist = np.linalg.norm(self.pos[i] - wp)
+            total -= collisions[i] * 10.0  # Penalty for hitting obstacles
 
             # Check waypoint reached
             if dist < self.WAYPOINT_RADIUS and self.current_waypoint_idx[i] < len(
