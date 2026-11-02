@@ -210,14 +210,14 @@ def _generate_aviary_xml(
             if gimbal_control:
                 drone_bodies += f"""      <body name="{prefix}_gimbal" pos="0 0 0">
         <joint name="{prefix}_gimbal_joint_z" type="hinge"
-               axis="0 0 1" range="{GIMBAL_Z_MIN} {GIMBAL_Z_MAX}" damping="1.0"/>
+               axis="0 0 1" range="{GIMBAL_Z_MIN} {GIMBAL_Z_MAX}" damping="0.00005"/>
         <inertial pos="0 0 0" mass="{GIMBAL_STAGE_MASS}"
                   diaginertia="1e-7 1e-7 1e-7"/>
         <geom name="{prefix}_gimbal_geom" type="box"
               size="0.02 0.02 0.02" rgba="0.5 0.5 0.5 1"/>
         <body name="{prefix}_gimbal_pitch" pos="0 0 0">
             <joint name="{prefix}_gimbal_joint_y" type="hinge"
-                axis="0 1 0" range="{GIMBAL_Y_MIN} {GIMBAL_Y_MAX}" damping="1.0"/>
+                axis="0 1 0" range="{GIMBAL_Y_MIN} {GIMBAL_Y_MAX}" damping="0.00005"/>
             <inertial pos="0 0 0" mass="{GIMBAL_STAGE_MASS}"
                 diaginertia="1e-7 1e-7 1e-7"/>
             <camera name="{prefix}_gimbal_cam" pos="0 0 0"
@@ -226,14 +226,14 @@ def _generate_aviary_xml(
       </body>\n"""
 
                 actuators += (
-                    f'    <position name="{prefix}_gimbal_y_motor" gear="1" '
-                    f'joint="{prefix}_gimbal_joint_y" ctrllimited="true" '
-                    f'ctrlrange="{GIMBAL_Y_MIN} {GIMBAL_Y_MAX}"/>\n'
+                    f'    <position name="{prefix}_gimbal_y_motor" joint="{prefix}_gimbal_joint_y" '
+                    f'kp="0.0005" ctrllimited="true" ctrlrange="{GIMBAL_Y_MIN} {GIMBAL_Y_MAX}" '
+                    f'forcelimited="true" forcerange="-0.0005 0.0005"/>\n'
                 )
                 actuators += (
-                    f'    <position name="{prefix}_gimbal_z_motor" gear="1" '
-                    f'joint="{prefix}_gimbal_joint_z" ctrllimited="true" '
-                    f'ctrlrange="{GIMBAL_Z_MIN} {GIMBAL_Z_MAX}"/>\n'
+                    f'    <position name="{prefix}_gimbal_z_motor" joint="{prefix}_gimbal_joint_z" '
+                    f'kp="0.0005" ctrllimited="true" ctrlrange="{GIMBAL_Z_MIN} {GIMBAL_Z_MAX}" '
+                    f'forcelimited="true" forcerange="-0.0005 0.0005"/>\n'
                 )
 
         drone_bodies += "    </body>\n"
@@ -444,6 +444,7 @@ class BaseAviary(gym.Env):
         self.M = params["mass"] + (
             2 * GIMBAL_STAGE_MASS if vision_attributes and gimbal_control else 0.0
         )
+        self.GIMBAL_STAGE_MASS = GIMBAL_STAGE_MASS
         self.L = params["arm_length"]
         self.THRUST2WEIGHT_RATIO = params["thrust2weight_ratio"]
         self.J = np.diag([params["ixx"], params["iyy"], params["izz"]])
@@ -516,6 +517,8 @@ class BaseAviary(gym.Env):
         self.model = mujoco.MjModel.from_xml_string(xml_str)
         self.data = mujoco.MjData(self.model)
 
+        self._pids = None
+
         # Vision attributes
         if self.VISION_ATTR:
             self.IMG_RES = np.array([64, 48])
@@ -585,6 +588,8 @@ class BaseAviary(gym.Env):
         super().reset(seed=seed)
 
         mujoco.mj_resetData(self.model, self.data)
+
+        self._pids = None
 
         # Set initial states
         for i in range(self.NUM_DRONES):
@@ -1010,12 +1015,12 @@ class BaseAviary(gym.Env):
             images.append(np.ones((self.IMG_RES[1], self.IMG_RES[0]), dtype=np.float32))
             images.append(np.zeros((self.IMG_RES[1], self.IMG_RES[0]), dtype=np.int32))
 
-        if self.GIMBAL_CONTROL and gimbal_cam_id < 0:
-            images.append(
-                np.zeros((self.IMG_RES[1], self.IMG_RES[0], 4), dtype=np.uint8)
-            )
-            images.append(np.ones((self.IMG_RES[1], self.IMG_RES[0]), dtype=np.float32))
-            images.append(np.zeros((self.IMG_RES[1], self.IMG_RES[0]), dtype=np.int32))
+        # if self.GIMBAL_CONTROL and gimbal_cam_id < 0:
+        #     images.append(
+        #         np.zeros((self.IMG_RES[1], self.IMG_RES[0], 4), dtype=np.uint8)
+        #     )
+        #     images.append(np.ones((self.IMG_RES[1], self.IMG_RES[0]), dtype=np.float32))
+        #     images.append(np.zeros((self.IMG_RES[1], self.IMG_RES[0]), dtype=np.int32))
 
         if self._external_renderer is not None:
             rgb, dep, seg = self._external_renderer.render(
@@ -1024,13 +1029,13 @@ class BaseAviary(gym.Env):
             images.append(rgb)
             images.append(dep)
             images.append(seg)
-            if self.GIMBAL_CONTROL:
-                gimbal_rgb, gimbal_dep, gimbal_seg = self._external_renderer.render(
-                    data=self.data, cam_name=gimbal_cam_name, want_seg=self._render_seg
-                )
-                images.append(gimbal_rgb)
-                images.append(gimbal_dep)
-                images.append(gimbal_seg)
+            # if self.GIMBAL_CONTROL:
+            #     gimbal_rgb, gimbal_dep, gimbal_seg = self._external_renderer.render(
+            #         data=self.data, cam_name=gimbal_cam_name, want_seg=self._render_seg
+            #     )
+            #     images.append(gimbal_rgb)
+            #     images.append(gimbal_dep)
+            #     images.append(gimbal_seg)
             return tuple(images)
 
         if self._renderer is None:
@@ -1061,28 +1066,28 @@ class BaseAviary(gym.Env):
         images.append(dep)
         images.append(seg)
 
-        if self.GIMBAL_CONTROL:
-            self._renderer.update_scene(self.data, camera=gimbal_cam_name)
-            gimbal_rgb = self._renderer.render()
+        # if self.GIMBAL_CONTROL:
+        #     self._renderer.update_scene(self.data, camera=gimbal_cam_name)
+        #     gimbal_rgb = self._renderer.render()
 
-            self._renderer.enable_depth_rendering()
-            self._renderer.update_scene(self.data, camera=gimbal_cam_name)
-            gimbal_dep = self._renderer.render()
-            self._renderer.disable_depth_rendering()
+        #     self._renderer.enable_depth_rendering()
+        #     self._renderer.update_scene(self.data, camera=gimbal_cam_name)
+        #     gimbal_dep = self._renderer.render()
+        #     self._renderer.disable_depth_rendering()
 
-            if self._render_seg:
-                self._renderer.enable_segmentation_rendering()
-                self._renderer.update_scene(self.data, camera=gimbal_cam_name)
-                gimbal_seg = self._renderer.render()
-                self._renderer.disable_segmentation_rendering()
-            else:
-                gimbal_seg = np.zeros(
-                    (self.IMG_RES[1], self.IMG_RES[0]), dtype=np.int32
-                )
+        #     if self._render_seg:
+        #         self._renderer.enable_segmentation_rendering()
+        #         self._renderer.update_scene(self.data, camera=gimbal_cam_name)
+        #         gimbal_seg = self._renderer.render()
+        #         self._renderer.disable_segmentation_rendering()
+        #     else:
+        #         gimbal_seg = np.zeros(
+        #             (self.IMG_RES[1], self.IMG_RES[0]), dtype=np.int32
+        #         )
 
-            images.append(gimbal_rgb)
-            images.append(gimbal_dep)
-            images.append(gimbal_seg)
+        #     images.append(gimbal_rgb)
+        #     images.append(gimbal_dep)
+        #     images.append(gimbal_seg)
 
         return tuple(images)
 
@@ -1135,28 +1140,41 @@ class BaseAviary(gym.Env):
             return np.clip(rpms, 0, self.MAX_RPM)
 
         elif self.ACT_TYPE == ActionType.VEL:
-            # Velocity control: [vx, vy, vz, yaw_rate] per drone
-            # Uses internal PID to compute RPMs
             from multi_drone_mujoco.control.pid_control import PIDControl
 
-            action = np.array(action).reshape(self.NUM_DRONES, 4)
+            if self._pids is None:
+                self._pids = [PIDControl(self) for _ in range(self.NUM_DRONES)]
+
+            n_cols = 6 if self.GIMBAL_CONTROL else 4
+            action = np.asarray(action, dtype=np.float64).reshape(
+                self.NUM_DRONES, n_cols
+            )
             rpms = np.zeros((self.NUM_DRONES, 4))
             for i in range(self.NUM_DRONES):
-                # Compute target position from velocity
-                target_pos = self.pos[i] + action[i, :3] * self.CTRL_TIMESTEP
+                v_cmd = action[i, :3]
                 target_rpy = np.array(
                     [0, 0, self.rpy[i, 2] + action[i, 3] * self.CTRL_TIMESTEP]
                 )
-                rpms[i, :], _, _ = PIDControl(self).computeControl(
+                rpms[i, :], _, _ = self._pids[i].computeControl(
                     control_timestep=self.CTRL_TIMESTEP,
                     cur_pos=self.pos[i],
                     cur_quat=self.quat[i],
                     cur_vel=self.vel[i],
                     cur_ang_vel=self.ang_v[i],
-                    target_pos=target_pos,
+                    target_pos=self.pos[
+                        i
+                    ],  # zero position error: only the velocity term acts
                     target_rpy=target_rpy,
+                    target_vel=v_cmd,  # commanded velocity (m/s)
                 )
-            return np.clip(rpms, 0, self.MAX_RPM)
+            rpms = np.clip(rpms, 0, self.MAX_RPM)
+
+            if self.GIMBAL_CONTROL:
+                gimbal = np.zeros((self.NUM_DRONES, 2))
+                gimbal[:, 0] = np.clip(action[:, 4], GIMBAL_Y_MIN, GIMBAL_Y_MAX)
+                gimbal[:, 1] = np.clip(action[:, 5], GIMBAL_Z_MIN, GIMBAL_Z_MAX)
+                return rpms, gimbal
+            return rpms
 
         elif self.ACT_TYPE == ActionType.PID:
             # Target [x, y, z, yaw] per drone → PID computes RPMs
@@ -1218,12 +1236,9 @@ class BaseAviary(gym.Env):
         raise ValueError(f"Unknown action type: {self.ACT_TYPE}")
 
     def _normalizedActionToRPM(self, action):
-        """Convert [-1, 1] normalized action to [0, MAX_RPM]."""
-        return np.where(
-            action <= 0,
-            (action + 1) * self.HOVER_RPM,
-            self.HOVER_RPM + (self.MAX_RPM - self.HOVER_RPM) * action,
-        )
+        """Convert [-1, 1] normalized action to RPM around hover (±5%)."""
+        action = np.clip(action, -1.0, 1.0)
+        return self.HOVER_RPM * (1.0 + 0.05 * action)
 
     ############################################################################
     # SPACES (default implementations, overridden by subclasses)
@@ -1244,9 +1259,20 @@ class BaseAviary(gym.Env):
             act_lower = np.full(4 * self.NUM_DRONES, -1.0)
             act_upper = np.full(4 * self.NUM_DRONES, 1.0)
         elif self.ACT_TYPE == ActionType.VEL:
-            # [vx, vy, vz, yaw_rate] each in [-1, 1]
-            act_lower = np.full(4 * self.NUM_DRONES, -1.0)
-            act_upper = np.full(4 * self.NUM_DRONES, 1.0)
+            if self.GIMBAL_CONTROL:
+                # [vx, vy, vz, yaw_rate, gimbal_y, gimbal_z] per drone
+                act_lower = np.tile(
+                    np.array([-1, -1, -1, -1, GIMBAL_Y_MIN, GIMBAL_Z_MIN]),
+                    self.NUM_DRONES,
+                )
+                act_upper = np.tile(
+                    np.array([1, 1, 1, 1, GIMBAL_Y_MAX, GIMBAL_Z_MAX]),
+                    self.NUM_DRONES,
+                )
+            else:
+                # [vx, vy, vz, yaw_rate] each in [-1, 1]
+                act_lower = np.full(4 * self.NUM_DRONES, -1.0)
+                act_upper = np.full(4 * self.NUM_DRONES, 1.0)
         elif self.ACT_TYPE == ActionType.ONE_D_RPM:
             act_lower = np.full(self.NUM_DRONES, -1.0)
             act_upper = np.full(self.NUM_DRONES, 1.0)

@@ -27,6 +27,7 @@ all = [
     "Pillow>=9.0.0",
     "jax[cuda12]",
     "mujoco-mjx>=3.0.0",
+    "tensorboard"
 ]
 dev = [
     "pytest>=7.0",
