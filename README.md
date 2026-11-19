@@ -80,6 +80,19 @@ actions = {agent: env.action_space(agent).sample() for agent in env.agents}
 obs, rewards, terms, truncs, infos = env.step(actions)
 ```
 
+### Offline obstacle scenarios
+
+Generate fixed waypoint/obstacle layouts for training and evaluation:
+
+```bash
+python -m multi_drone_mujoco.examples.generate_scenarios
+python -m multi_drone_mujoco.examples.visualize_scenarios scenario_data/eval_15.npz
+```
+
+The generator writes 500 scenarios each for 10, 15, and 20 obstacles, plus
+100 evaluation scenarios with 15 obstacles. `ScenarioDataset` loads these
+layouts so resets no longer depend on online random placement.
+
 ## Examples
 
 ```bash

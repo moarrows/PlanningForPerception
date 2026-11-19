@@ -518,6 +518,7 @@ class BaseAviary(gym.Env):
         self.data = mujoco.MjData(self.model)
 
         self._pids = None
+        self._yaw_target = None
 
         # Vision attributes
         if self.VISION_ATTR:
@@ -568,7 +569,7 @@ class BaseAviary(gym.Env):
         self._external_renderer = None
         # Segmentation is rendered by default for backward compatibility, but it
         # is a full extra render pass and callers that discard it can opt out.
-        self._render_seg = True
+        self._render_seg = False
 
         # Wind disturbance (set via set_wind() or subclass)
         self._wind_field = None
@@ -1029,13 +1030,13 @@ class BaseAviary(gym.Env):
             images.append(rgb)
             images.append(dep)
             images.append(seg)
-            # if self.GIMBAL_CONTROL:
-            #     gimbal_rgb, gimbal_dep, gimbal_seg = self._external_renderer.render(
-            #         data=self.data, cam_name=gimbal_cam_name, want_seg=self._render_seg
-            #     )
-            #     images.append(gimbal_rgb)
-            #     images.append(gimbal_dep)
-            #     images.append(gimbal_seg)
+            if self.GIMBAL_CONTROL and gimbal_cam_id >= 0:
+                gimbal_rgb, gimbal_dep, gimbal_seg = self._external_renderer.render(
+                    data=self.data,
+                    cam_name=gimbal_cam_name,
+                    want_seg=self._render_seg,
+                )
+                images.extend((gimbal_rgb, gimbal_dep, gimbal_seg))
             return tuple(images)
 
         if self._renderer is None:
@@ -1066,28 +1067,26 @@ class BaseAviary(gym.Env):
         images.append(dep)
         images.append(seg)
 
-        # if self.GIMBAL_CONTROL:
-        #     self._renderer.update_scene(self.data, camera=gimbal_cam_name)
-        #     gimbal_rgb = self._renderer.render()
+        if self.GIMBAL_CONTROL and gimbal_cam_id >= 0:
+            self._renderer.update_scene(self.data, camera=gimbal_cam_name)
+            gimbal_rgb = self._renderer.render()
 
-        #     self._renderer.enable_depth_rendering()
-        #     self._renderer.update_scene(self.data, camera=gimbal_cam_name)
-        #     gimbal_dep = self._renderer.render()
-        #     self._renderer.disable_depth_rendering()
+            self._renderer.enable_depth_rendering()
+            self._renderer.update_scene(self.data, camera=gimbal_cam_name)
+            gimbal_dep = self._renderer.render()
+            self._renderer.disable_depth_rendering()
 
-        #     if self._render_seg:
-        #         self._renderer.enable_segmentation_rendering()
-        #         self._renderer.update_scene(self.data, camera=gimbal_cam_name)
-        #         gimbal_seg = self._renderer.render()
-        #         self._renderer.disable_segmentation_rendering()
-        #     else:
-        #         gimbal_seg = np.zeros(
-        #             (self.IMG_RES[1], self.IMG_RES[0]), dtype=np.int32
-        #         )
+            if self._render_seg:
+                self._renderer.enable_segmentation_rendering()
+                self._renderer.update_scene(self.data, camera=gimbal_cam_name)
+                gimbal_seg = self._renderer.render()
+                self._renderer.disable_segmentation_rendering()
+            else:
+                gimbal_seg = np.zeros(
+                    (self.IMG_RES[1], self.IMG_RES[0]), dtype=np.int32
+                )
 
-        #     images.append(gimbal_rgb)
-        #     images.append(gimbal_dep)
-        #     images.append(gimbal_seg)
+            images.extend((gimbal_rgb, gimbal_dep, gimbal_seg))
 
         return tuple(images)
 
@@ -1150,22 +1149,31 @@ class BaseAviary(gym.Env):
                 self.NUM_DRONES, n_cols
             )
             rpms = np.zeros((self.NUM_DRONES, 4))
+            YAW_RATE_MAX = 2.0   # rad/s limit on how fast the target turns
+
+            if self._yaw_target is None:
+                self._yaw_target = self.rpy[:, 2].copy()
+
             for i in range(self.NUM_DRONES):
                 v_cmd = action[i, :3]
-                target_rpy = np.array(
-                    [0, 0, self.rpy[i, 2] + action[i, 3] * self.CTRL_TIMESTEP]
-                )
+                v_xy = v_cmd[:2]
+                if np.linalg.norm(v_xy) > 0.3:            # only turn when actually moving
+                    desired = np.arctan2(v_xy[1], v_xy[0])
+                    err = (desired - self._yaw_target[i] + np.pi) % (2 * np.pi) - np.pi
+                    max_step = YAW_RATE_MAX * self.CTRL_TIMESTEP
+                    self._yaw_target[i] += np.clip(err, -max_step, max_step)
+                    self._yaw_target[i] = (self._yaw_target[i] + np.pi) % (2 * np.pi) - np.pi
+                target_rpy = np.array([0, 0, self._yaw_target[i]])
+
                 rpms[i, :], _, _ = self._pids[i].computeControl(
                     control_timestep=self.CTRL_TIMESTEP,
                     cur_pos=self.pos[i],
                     cur_quat=self.quat[i],
                     cur_vel=self.vel[i],
                     cur_ang_vel=self.ang_v[i],
-                    target_pos=self.pos[
-                        i
-                    ],  # zero position error: only the velocity term acts
+                    target_pos=self.pos[i],
                     target_rpy=target_rpy,
-                    target_vel=v_cmd,  # commanded velocity (m/s)
+                    target_vel=v_cmd,
                 )
             rpms = np.clip(rpms, 0, self.MAX_RPM)
 
@@ -1332,6 +1340,18 @@ class BaseAviary(gym.Env):
                     shape=(self.NUM_DRONES, 48, 64, 3),
                     dtype=np.uint8,
                 )
+                obs.spaces["depth"] = spaces.Box(
+                    low=0.0,
+                    high=1.0,
+                    shape=(self.NUM_DRONES, 48, 64, 1),
+                    dtype=np.float32,
+                )
+                obs.spaces["gimbal_depth"] = spaces.Box(
+                    low=0.0,
+                    high=1.0,
+                    shape=(self.NUM_DRONES, 48, 64, 1),
+                    dtype=np.float32,
+                )
 
             return obs
         raise ValueError(f"Unknown obs type: {self.OBS_TYPE}")
@@ -1369,10 +1389,14 @@ class BaseAviary(gym.Env):
 
             if self.GIMBAL_CONTROL:
                 gimbal_imgs = np.stack([img[3] for img in images])
+                depths = np.stack([img[1][..., None] for img in images])
+                gimbal_depths = np.stack([img[4][..., None] for img in images])
                 return {
                     "kin": kin.astype(np.float32),
                     "rgb": imgs,
                     "gimbal_rgb": gimbal_imgs,
+                    "depth": depths.astype(np.float32),
+                    "gimbal_depth": gimbal_depths.astype(np.float32),
                 }
 
             return {"kin": kin.astype(np.float32), "rgb": imgs}
@@ -1486,7 +1510,7 @@ class BaseAviary(gym.Env):
         from PIL import Image as PILImage
 
         if self._renderer is None:
-            self._renderer = mujoco.Renderer(self.model, height=480, width=640)
+            self._renderer = mujoco.Renderer(self.model, height=1080, width=1920)
         self._renderer.update_scene(self.data)
         img = self._renderer.render()
         PILImage.fromarray(img).save(

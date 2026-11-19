@@ -14,6 +14,7 @@ from multi_drone_mujoco.utils.enums import (
     Physics,
 )
 from gymnasium import spaces
+from multi_drone_mujoco.utils.scenario_loader import ScenarioDataset, apply_scenario
 
 
 class CustomAviary(BaseAviary):
@@ -32,11 +33,13 @@ class CustomAviary(BaseAviary):
         waypoint_radius: float = 0.25,
         initial_xyzs=None,
         render_mode=None,
+        scenario_dataset: ScenarioDataset = None,
     ):
-        self.EPISODE_LEN_SEC = 30
+        self.EPISODE_LEN_SEC = 60
         self.WAYPOINT_RADIUS = waypoint_radius
+        self.scenario_dataset = scenario_dataset
         self._dbg = getattr(
-            self, "_dbg", dict(prog=0, time=0, angv=0, bonus=0, crash=0)
+            self, "_dbg", dict(prog=0.0, time=0.0, bonus=0.0, crash=0.0, smooth=0.0, obstacleCollision=0.0, obstacleRadius=0.0)
         )
 
         if waypoints is None:
@@ -80,9 +83,14 @@ class CustomAviary(BaseAviary):
             for i in range(self.NUM_DRONES)
         }
 
+        self.SAFE = 0.175
+
         self._prev_dist = None
-        self.curriculum_radius = 0.4
+        self.curriculum_radius = 1.5
         self._last_contact_step = -10_000
+        self._prev_action = np.zeros(3, dtype=np.float32)
+        self._action_delta = 0.0
+        self._obstacle_body_ids = ()
 
     def set_curriculum_radius(self, r):
         self.curriculum_radius = r
@@ -90,66 +98,18 @@ class CustomAviary(BaseAviary):
     def set_waypoint_radius(self, r):
         self.WAYPOINT_RADIUS = r
 
-    def _randomize_obstacles(
-        self, n_obs=5, xy_range=1.5, z_range=(0.3, 1.8), clearance=0.4, tries=50
-    ):
-        keep_away = [self.INIT_XYZS[0]] + list(self.WAYPOINTS)
-        placed = []
-        for i in range(n_obs):
-            body_id = mujoco.mj_name2id(
-                self.model, mujoco.mjtObj.mjOBJ_BODY, f"obs_{i}"
-            )
-            if body_id < 0:
-                continue
-            for _ in range(tries):
-                cand = np.array(
-                    [
-                        self._rng.uniform(-xy_range, xy_range),
-                        self._rng.uniform(-xy_range, xy_range),
-                        self._rng.uniform(*z_range),
-                    ]
-                )
-                ok = all(
-                    np.linalg.norm(cand - p) > clearance for p in keep_away + placed
-                )
-                if ok:
-                    break
-            placed.append(cand)
-            self.model.body_pos[body_id] = cand
-
-        # per-episode motion so timing can't be memorized from the clock
-        self._obs_phase = self._rng.uniform(0, 2 * np.pi)
-        self._obs_amp = self._rng.uniform(0.2, 0.5)
-
     def reset(self, seed=None, options=None):
+        if seed is not None or not hasattr(self, "_rng"):
+            self._rng = np.random.default_rng(seed)
+
         self._filtered_action = None
         self._prev_dist = None
         self.current_waypoint_idx[:] = 0
-        self._dbg = dict(prog=0.0, time=0.0, bonus=0.0, crash=0.0)
+        self._dbg = dict(prog=0.0, time=0.0, bonus=0.0, crash=0.0, smooth=0.0, obstacleCollision=0.0, obstacleRadius=0.0)
         self._last_contact_step = -10_000
-        R = self.curriculum_radius  # start 0.4, grow to 1.5
-        if seed is not None or not hasattr(self, "_rng"):
-            self._rng = np.random.default_rng(seed)
-        min_gap = 2 * self.WAYPOINT_RADIUS + 0.2
-        wps = []  # collects the 5 waypoints
-        prev = self.INIT_XYZS[0].copy()  # start_pos: where the drone begins
-
-        for k in range(5):
-            for _ in range(20):  # up to 20 tries to find a far-enough point
-                cand = np.array(
-                    [
-                        self._rng.uniform(-R, R),
-                        self._rng.uniform(-R, R),
-                        self._rng.uniform(0.3, 0.3 + R),
-                    ]
-                )
-                if np.linalg.norm(cand - prev) > min_gap:
-                    break
-            wps.append(cand)
-            prev = cand
-
-        self.WAYPOINTS = np.array(wps)
-        self._randomize_obstacles()
+        if self.scenario_dataset is not None:
+            scenario = self.scenario_dataset.next(self._rng)
+            apply_scenario(self, scenario)
         return super().reset(seed=seed, options=options)
 
     def _obstacleCollisions(self):
@@ -170,6 +130,60 @@ class CustomAviary(BaseAviary):
                     hits[self._drone_body_ids[drone_root]] += 1
         return hits
 
+    def _nearest_obstacle_dist(self, i=0):
+        return self._nearest_obstacle_dist_from_point(self.pos[i])
+
+    def _nearest_obstacle_dist_given_point(self, point):
+        return self._nearest_obstacle_dist_from_point(point)
+
+    def _nearest_obstacle_dist_from_point(self, point):
+        """Return conservative clearance from a point to the obstacle bodies."""
+        ids = sorted(b for b in self._obstacle_body_ids if b >= 0)
+        if not ids:
+            return 10.0
+
+        point = np.asarray(point, dtype=np.float64)
+        obstacle_positions = self.data.xpos[ids]
+        obstacle_radii = []
+
+        for body_id in ids:
+            geom_ids = np.flatnonzero(self.model.geom_bodyid == body_id)
+            obstacle_radii.append(
+                max(
+                    float(self.model.geom_size[geom_id, 0])
+                    for geom_id in geom_ids
+                    if self.model.geom_type[geom_id]
+                    == mujoco.mjtGeom.mjGEOM_CYLINDER
+                )
+            )
+
+        drone_radius = float(self.COLLISION_R)
+
+        center_distances = np.linalg.norm(
+            obstacle_positions[:, :2] - point[:2],
+            axis=1,
+        )
+
+        clearances = center_distances - np.asarray(obstacle_radii) - drone_radius
+        return float(clearances.min())
+
+    def _computeOrientationReward(self, i):
+        vxy = self.vel[i][:2]
+        speed = np.linalg.norm(vxy)
+        if speed < 0.2:
+            return 0.0
+
+        velocity_direction = vxy / speed
+        forward_direction = np.array(
+            [np.cos(self.rpy[i, 2]), np.sin(self.rpy[i, 2])]
+        )
+        alignment = float(np.clip(np.dot(forward_direction, velocity_direction), -1.0, 1.0))
+
+        # The body-mounted camera looks along the drone's +X axis. Reward
+        # horizontal motion in that same direction and penalize sideways or
+        # backward flight.
+        return -0.03 * min(speed, 1.0) * (1.0 - alignment)
+
     def _computeReward(self):
         total = 0.0
         collisions = self._obstacleCollisions()
@@ -179,16 +193,7 @@ class CustomAviary(BaseAviary):
             wp = self.WAYPOINTS[wp_idx]
             dist = np.linalg.norm(self.pos[i] - wp)
             total -= min(collisions[i], 1) * 10.0
-
-            # Check waypoint reached
-            if dist < self.WAYPOINT_RADIUS and self.current_waypoint_idx[i] < len(
-                self.WAYPOINTS
-            ):
-                self.current_waypoint_idx[i] += 1
-                total += 100.0  # Big bonus for reaching waypoint
-                self._dbg["bonus"] += 100
-                self._prev_dist = None
-                continue
+            self._dbg["obstacleCollision"] -= min(collisions[i], 1) * 50.0
 
             if self._prev_dist is None:
                 self._prev_dist = dist
@@ -196,8 +201,30 @@ class CustomAviary(BaseAviary):
             self._dbg["prog"] += 5.0 * (self._prev_dist - dist)
             self._prev_dist = dist
 
+            smooth = 0.005 * self._action_delta
+            total -= smooth
+            self._dbg["smooth"] -= smooth
+
+            gap = self._nearest_obstacle_dist(i)
+            if gap < self.SAFE:
+                prox = 0.15 * ((self.SAFE - gap) / self.SAFE) ** 2     # 0 at SAFE, 2.0 at contact
+                total -= prox
+                self._dbg["obstacleRadius"] -= prox
+
             total -= 0.005
             self._dbg["time"] -= 0.005
+
+            if dist < self.WAYPOINT_RADIUS and self.current_waypoint_idx[i] < len(
+                self.WAYPOINTS
+            ):
+                self.current_waypoint_idx[i] += 1
+                total += 100.0
+                self._dbg["bonus"] += 100.0
+                self._prev_dist = None
+            
+            if self.current_waypoint_idx[i] >= len(self.WAYPOINTS):
+                total += 300
+                self._dbg["bonus"] += 300
 
         if collisions.sum() > 0:
             self._last_contact_step = self.step_counter
@@ -220,6 +247,9 @@ class CustomAviary(BaseAviary):
             if self.pos[i, 2] < 0.03:
                 self._term_reason = "floor"
                 return True
+            if self._obstacleCollisions() >= 1:
+                self._term_reason = "collision"
+                return True
             if abs(self.rpy[i, 0]) > np.pi / 2 or abs(self.rpy[i, 1]) > np.pi / 2:
                 recent = (
                     self.step_counter - self._last_contact_step
@@ -238,10 +268,16 @@ class CustomAviary(BaseAviary):
         return all_done or time_up
 
     def _computeInfo(self):
-        return {
+        info = {
             "waypoints_reached": [int(idx) for idx in self.current_waypoint_idx],
             "total_waypoints": len(self.WAYPOINTS),
         }
+
+        if self._computeTerminated() or self._computeTruncated():
+            info["dbg"] = dict(self._dbg)
+            info["termination_reason"] = self._term_reason
+
+        return info
 
     def _observationSpace(self):
         obs = spaces.Dict(
@@ -257,6 +293,12 @@ class CustomAviary(BaseAviary):
                     high=255,
                     shape=(48, 64, 3),
                     dtype=np.uint8,
+                ),
+                "depth": spaces.Box(
+                    low=0.0,
+                    high=1.0,
+                    shape=(48, 64, 1),
+                    dtype=np.float32,
                 ),
                 "waypoint_rel": spaces.Box(
                     low=-np.inf,
@@ -274,6 +316,12 @@ class CustomAviary(BaseAviary):
                 shape=(48, 64, 3),
                 dtype=np.uint8,
             )
+            # obs.spaces["gimbal_depth"] = spaces.Box(
+            #     low=0.0,
+            #     high=1.0,
+            #     shape=(48, 64, 1),
+            #     dtype=np.float32,
+            # )
 
         return obs
 
@@ -294,21 +342,43 @@ class CustomAviary(BaseAviary):
             "rgb": np.ascontiguousarray(imgs, dtype=np.uint8),
             "waypoint_rel": rel,
         }
+        depth = np.nan_to_num(
+            np.asarray(images[0][1], dtype=np.float32),
+            nan=1.0,
+            posinf=1.0,
+            neginf=0.0,
+        )
+        obs["depth"] = np.ascontiguousarray(
+            np.clip(depth, 0.0, 1.0)[..., None],
+            dtype=np.float32,
+        )
 
         if self.GIMBAL_CONTROL:
-            obs["gimbal_rgb"] = np.zeros((48, 64, 3), dtype=np.uint8)
+            obs["gimbal_rgb"] = np.zeros(
+                (48, 64, 3),
+                dtype=np.uint8,
+            )
+            # obs["gimbal_depth"] = np.zeros(
+            #     (48, 64, 1),
+            #     dtype=np.float32,
+            # )
+            # obs["gimbal_rgb"] = np.ascontiguousarray(images[0][3], dtype=np.uint8)
+            # obs["gimbal_depth"] = np.ascontiguousarray(
+            #     images[0][4][..., None], dtype=np.float32
+            # )
 
         return obs
 
     def step(self, action):
         action = np.asarray(action, dtype=np.float32).copy()
-        action[..., 3:6] = 0
+        action[..., 4:6] = 0
+
         z = self.pos[0, 2]
         if z < 0.15:
             action[..., 2] = max(action[..., 2], 0.0)  # no descending near the floor
 
-        # t = self.data.time
-        # for i, actuator_id in enumerate(self.obstacle_actuator_ids):
-        #     self.data.ctrl[actuator_id] = 0.5 * np.sin(2 * np.pi * 0.2 * t)
+        v = action.reshape(-1)[:3]                       # only vx, vy, vz are active
+        self._action_delta = float(np.linalg.norm(v - self._prev_action))
+        self._prev_action = v.copy()
 
         return super().step(action)

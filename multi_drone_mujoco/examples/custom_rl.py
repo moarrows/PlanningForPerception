@@ -3,7 +3,7 @@ import mujoco
 import numpy as np
 
 from stable_baselines3 import PPO
-from stable_baselines3.common.callbacks import EvalCallback, BaseCallback
+from stable_baselines3.common.callbacks import EvalCallback, BaseCallback, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import (
     DummyVecEnv,
@@ -11,8 +11,42 @@ from stable_baselines3.common.vec_env import (
     VecTransposeImage,
     SubprocVecEnv,
 )
-from multi_drone_mujoco.envs.custom_aviary import CustomAviary
 
+from multi_drone_mujoco.envs.custom_aviary import CustomAviary
+from multi_drone_mujoco.utils.scenario_loader import (
+    load_scenarios,
+    inject_obstacles,
+)
+
+SCENARIO_PATH = "scenario_data/train_10.npz"
+EVAL_SCENARIO_PATH = "scenario_data/eval_10.npz"
+
+from stable_baselines3 import PPO
+import torch
+
+class DiagnosticPPO(PPO):
+    def train(self):
+        # Check the first minibatch before any optimizer updates
+        rollout_data = next(
+            self.rollout_buffer.get(self.batch_size)
+        )
+
+        with torch.no_grad():
+            values, log_prob, entropy = (
+                self.policy.evaluate_actions(
+                    rollout_data.observations,
+                    rollout_data.actions
+                )
+            )
+
+            log_ratio = log_prob - rollout_data.old_log_prob
+            ratio = torch.exp(log_ratio)
+
+            kl = ((ratio - 1) - log_ratio).mean()
+
+            print(f"\nPRE-UPDATE KL: {kl.item():.6f}\n")
+
+        super().train()
 
 class WaypointCurriculumCallback(BaseCallback):
     def __init__(
@@ -46,6 +80,10 @@ class WaypointCurriculumCallback(BaseCallback):
             reached = info["waypoints_reached"][0]
             self.logger.record_mean("custom/waypoints_reached", reached)
             self.recent.append(reached)
+
+            dbg = info.get("dbg", {})
+            for name, value in dbg.items():
+                self.logger.record_mean(f"custom/{name}", value)
 
             if len(self.recent) >= self.window:
                 mean_wp = np.mean(self.recent[-self.window :])
@@ -105,138 +143,29 @@ class WaypointRadiusCallback(BaseCallback):
         self.logger.record("custom/hit_radius", self.radius)
         return True
 
-
-def add_obstacles(env):
-    xml = env.xml_str
-
-    np.random.seed(42)
-
-    obstacle_xml = ""
-    actuator_xml = ""
-
-    colors = [
-        "0.9 0.2 0.2 0.9",
-        "0.2 0.8 0.2 0.9",
-        "0.2 0.3 0.9 0.9",
-        "0.9 0.6 0.1 0.9",
-        "0.7 0.2 0.9 0.9",
-        "0.1 0.8 0.8 0.9",
-    ]
-
-    for i in range(5):
-        x = np.random.uniform(-1.5, 1.5)
-        y = np.random.uniform(-1.5, 1.5)
-
-        if abs(x) < 0.3 and abs(y) < 0.3:
-            x += 0.5 * np.sign(x + 0.01)
-
-        h = np.random.uniform(0.4, 1.5)
-        w = np.random.uniform(0.4, 0.6)
-        l = np.random.uniform(0.4, 0.6)
-        r = np.random.uniform(0.03, 0.07)
-        color = colors[i % len(colors)]
-
-        # Obstacle body
-        obstacle_xml += f'''
-        <body name="obs_{i}" pos="{x:.2f} {y:.2f} {h / 2:.2f}">
-
-            <joint
-                name="obs_{i}_joint"
-                type="slide"
-                axis="1 0 0"
-                range="-2.0 2.0"
-                limited="true"/>
-
-            <geom
-                type="cylinder"
-                size="{r:.3f} {h / 2:.2f}"
-                rgba="{color}"/>
-            
-            <inertial pos="0 0 0" mass="0.01" diaginertia="0.0001 0.0001 0.0001"/>
-
-        </body>
-        '''
-
-        # Actuator
-        actuator_xml += f"""
-        <position
-            name="obs_{i}_motor"
-            joint="obs_{i}_joint"
-            kp="100"/>
-        """
-
-    # for i in range(10, 25):
-    #     x = np.random.uniform(-1.5, 1.5)
-    #     y = np.random.uniform(-1.5, 1.5)
-
-    #     if abs(x) < 0.3 and abs(y) < 0.3:
-    #         x += 0.5 * np.sign(x + 0.01)
-
-    #     h = np.random.uniform(0.4, 1.5)
-    #     r = np.random.uniform(0.03, 0.07)
-    #     color = colors[i % len(colors)]
-
-    #     # Obstacle body
-    #     obstacle_xml += f'''
-    #     <body name="obs_{i}" pos="{x:.2f} {y:.2f} {h / 2:.2f}">
-    #         <geom
-    #             type="cylinder"
-    #             size="{r:.3f} {h / 2:.2f}"
-    #             rgba="{color}"/>
-
-    #     </body>
-    #     '''
-
-    # Add obstacles to worldbody
-    xml = xml.replace("</worldbody>", obstacle_xml + "  </worldbody>")
-
-    # Add actuators to actuator section
-    xml = xml.replace("</actuator>", actuator_xml + "  </actuator>")
-
-    # Create new model
-    model = mujoco.MjModel.from_xml_string(xml)
-    data = mujoco.MjData(model)
-
-    env.model = model
-    env.data = data
-    env._renderer = None
-
-    mujoco.mj_forward(env.model, env.data)
-    env._updateAndStoreKinematicInformation()
-
-    # Store actuator IDs
-    env.obstacle_actuator_ids = np.array(
-        [
-            mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"obs_{i}_motor")
-            for i in range(10)
-        ]
-    )
-
-    env._obstacle_body_ids = {
-        mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_BODY, f"obs_{i}")
-        for i in range(25)
-    }
-
-
 def load_model():
     n_envs = 8
-    env = SubprocVecEnv([make_env() for _ in range(n_envs)])
-    env = VecNormalize.load("vecnormalize_V5.pkl", env)  # restores the running stats
+    env = SubprocVecEnv(
+        [make_env(SCENARIO_PATH, sequential=False) for _ in range(n_envs)]
+    )
+    env = VecNormalize.load("vecnormalize_V8.pkl", env)  # restores the running stats
     env.training = True  # keep updating stats while training
     env.norm_reward = True
     env = VecTransposeImage(env)
 
-    eval_env = DummyVecEnv([make_env()])
-    eval_env = VecNormalize.load("vecnormalize_V5.pkl", eval_env)
+    eval_env = DummyVecEnv(
+        [make_env(EVAL_SCENARIO_PATH, sequential=True)]
+    )
+    eval_env = VecNormalize.load("vecnormalize_V8.pkl", eval_env)
     eval_env.training = False  # freeze stats
     eval_env.norm_reward = False
     eval_env = VecTransposeImage(eval_env)
 
     model = PPO.load(
-        "quadcopter_V5",
+        "quadcopter_V8",
         env=env,
         device="cuda",
-        custom_objects={"learning_rate": 3e-5, "lr_schedule": lambda _: 3e-5},
+        custom_objects={"learning_rate": 1e-4, "lr_schedule": lambda _: 1e-4, "n_epochs": 5, "ent_coef": 0.01, "target_kl": 0.05}, 
     )
 
     return env, eval_env, model
@@ -244,7 +173,9 @@ def load_model():
 
 def make_model():
     n_envs = 8  # no more than your CPU core count
-    env = SubprocVecEnv([make_env() for _ in range(n_envs)])
+    env = SubprocVecEnv(
+        [make_env(SCENARIO_PATH, sequential=False) for _ in range(n_envs)]
+    )
     env = VecNormalize(
         env,
         norm_obs=True,
@@ -253,7 +184,9 @@ def make_model():
         clip_obs=10.0,
     )
 
-    eval_env = DummyVecEnv([make_env()])
+    eval_env = DummyVecEnv(
+        [make_env(EVAL_SCENARIO_PATH, sequential=True)]
+    )
     eval_env = VecNormalize(
         eval_env,
         norm_obs=True,
@@ -279,10 +212,15 @@ def make_model():
     return env, eval_env, model
 
 
-def make_env():
+def make_env(scenario_path=SCENARIO_PATH, sequential=False):
     def _init():
-        e = CustomAviary(record=False, gui=False)
-        add_obstacles(e)
+        scenarios = load_scenarios(scenario_path, sequential=sequential)
+        e = CustomAviary(
+            record=False,
+            gui=False,
+            scenario_dataset=scenarios,
+        )
+        inject_obstacles(e, scenarios.obstacle_count)
         return Monitor(e)
 
     return _init
@@ -305,26 +243,35 @@ def main():
     )
 
     waypoint_curriculum_callback = WaypointCurriculumCallback(
-        eval_env=eval_env, start_radius=1.5
+        eval_env=eval_env, start_radius=3.0
     )
     waypoint_radius_callback = WaypointRadiusCallback(
         eval_env=eval_env, start_radius=0.10, window=50
     )
 
+    checkpoint_callback = CheckpointCallback(
+        save_freq=25000,
+        save_path="./models/",
+        name_prefix="rl_model",
+        save_replay_buffer=True,
+        save_vecnormalize=True,
+    )
+
     model.learn(
-        total_timesteps=3_000_000,
+        total_timesteps=5_000_000,
         callback=[
             eval_callback,
             waypoint_curriculum_callback,
             waypoint_radius_callback,
+            checkpoint_callback,
         ],
         reset_num_timesteps=False,
     )
 
     print("Training finished. Evaluating final policy...")
 
-    model.save("quadcopter_V5")
-    env.venv.save("vecnormalize_V5.pkl")
+    model.save("quadcopter_V9")
+    env.venv.save("vecnormalize_V9.pkl")
 
     # Evaluate a few episodes
     obs = eval_env.reset()
@@ -348,8 +295,9 @@ def view_env():
     print("Viewing CustomAviary Environment")
     print("=" * 60)
 
-    env = CustomAviary(record=False, gui=False)
-    add_obstacles(env)
+    scenarios = load_scenarios(EVAL_SCENARIO_PATH, sequential=True)
+    env = CustomAviary(record=False, gui=False, scenario_dataset=scenarios)
+    inject_obstacles(env, scenarios.obstacle_count)
 
     env.reset()
 
@@ -366,18 +314,20 @@ def view_env():
 
 def test_model():
     env, eval_env, model = load_model()
+    base_env = eval_env.venv.venv.envs[0].unwrapped
 
     obs = eval_env.reset()
     total_reward = 0.0
     episodes = 0
-    while episodes < 50:
-        action, _states = model.predict(obs, deterministic=True)
-        obs, reward, dones, infos = eval_env.step(action)
-        total_reward += float(reward[0])
-        if dones[0]:
-            print(f"Episode {episodes + 1} finished with reward: {total_reward:.2f}")
-            total_reward = 0.0
-            episodes += 1
+    with mujoco.viewer.launch_passive(base_env.model, base_env.data) as viewer:
+        while episodes < 5:
+            action, _states = model.predict(obs, deterministic=True)
+            viewer.sync()
+            obs, reward, dones, infos = eval_env.step(action)
+            total_reward += float(reward[0])
+            if dones[0]:
+                total_reward = 0.0
+                episodes += 1
 
     env.close()
     eval_env.close()
@@ -385,6 +335,6 @@ def test_model():
 
 if __name__ == "__main__":
     # test_env()  # Test the environment for stability
-    # main()  # Train the PPO agent
+    main()  # Train the PPO agent
     # view_env()  # View the environment with obstacles
-    test_model()
+    # test_model() # Test the trained model visually
